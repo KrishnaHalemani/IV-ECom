@@ -135,6 +135,9 @@ CREATE TABLE `products` (
   `price` decimal(10,2) NOT NULL DEFAULT 0.00,
   `stock_qty` int(11) NOT NULL DEFAULT 0,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `is_featured` tinyint(1) NOT NULL DEFAULT 0,
+  `is_new` tinyint(1) NOT NULL DEFAULT 0,
+  `display_section` enum('home','new_arrivals','featured','none') NOT NULL DEFAULT 'home',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -143,9 +146,62 @@ CREATE TABLE `products` (
 -- Dumping data for table `products`
 --
 
-INSERT INTO `products` (`id`, `category_id`, `name`, `sku`, `image_path`, `description`, `price`, `stock_qty`, `is_active`, `created_at`, `updated_at`) VALUES
-(1, 1, 'Krishna Halemani', 'Test', '', 'Descp', 10000.00, 10, 1, '2026-04-24 10:48:45', '2026-04-24 10:48:45'),
-(2, 1, 'Suraj B', 'asdfghjkl;', 'uploads/products/product_1777028622_69eb4e0ee58b87.67966763.jpg', 'asdfghjkbvczxcv', 12345.00, 10, 1, '2026-04-24 11:03:42', '2026-04-24 11:03:42');
+INSERT INTO `products` (`id`, `category_id`, `name`, `sku`, `image_path`, `description`, `price`, `stock_qty`, `is_active`, `is_featured`, `is_new`, `display_section`, `created_at`, `updated_at`) VALUES
+(1, 1, 'Krishna Halemani', 'Test', '', 'Descp', 10000.00, 10, 1, 1, 0, 'featured', '2026-04-24 10:48:45', '2026-04-24 10:48:45'),
+(2, 1, 'Suraj B', 'asdfghjkl;', 'uploads/products/product_1777028622_69eb4e0ee58b87.67966763.jpg', 'asdfghjkbvczxcv', 12345.00, 10, 1, 0, 1, 'new_arrivals', '2026-04-24 11:03:42', '2026-04-24 11:03:42');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `hero_sections`
+--
+
+CREATE TABLE `hero_sections` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `title` varchar(220) NOT NULL,
+  `subtitle` varchar(220) DEFAULT '',
+  `button_text` varchar(80) DEFAULT 'Shop Now',
+  `button_link` varchar(255) DEFAULT '#featured-products',
+  `image` varchar(255) DEFAULT '',
+  `sort_order` int(11) NOT NULL DEFAULT 0,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `hero_sections`
+--
+
+INSERT INTO `hero_sections` (`id`, `title`, `subtitle`, `button_text`, `button_link`, `image`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'Tones of Shop UI Features Designed', '', 'Shop Now', '#featured-products', 'assets/pages/img/shop-slider/slide1/bg.jpg', 1, 1, '2026-04-24 11:10:00', '2026-04-24 11:10:00'),
+(2, 'Unlimited Layout Options', 'Fully Responsive', 'Shop Now', '#featured-products', 'assets/pages/img/shop-slider/slide2/bg.jpg', 2, 1, '2026-04-24 11:10:00', '2026-04-24 11:10:00');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `homepage_sections`
+--
+
+CREATE TABLE `homepage_sections` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `section_name` varchar(120) NOT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `display_order` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `homepage_sections`
+--
+
+INSERT INTO `homepage_sections` (`id`, `section_name`, `is_enabled`, `display_order`, `created_at`, `updated_at`) VALUES
+(1, 'hero', 1, 1, '2026-04-24 11:10:00', '2026-04-24 11:10:00'),
+(2, 'products_from_admin', 1, 2, '2026-04-24 11:10:00', '2026-04-24 11:10:00'),
+(3, 'new_arrivals', 1, 3, '2026-04-24 11:10:00', '2026-04-24 11:10:00'),
+(4, 'featured', 1, 4, '2026-04-24 11:10:00', '2026-04-24 11:10:00'),
+(5, 'categories_sidebar', 1, 5, '2026-04-24 11:10:00', '2026-04-24 11:10:00');
 
 -- --------------------------------------------------------
 
@@ -208,6 +264,19 @@ ALTER TABLE `orders`
   ADD KEY `fk_orders_user` (`user_id`);
 
 --
+-- Indexes for table `hero_sections`
+--
+ALTER TABLE `hero_sections`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `homepage_sections`
+--
+ALTER TABLE `homepage_sections`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `section_name` (`section_name`);
+
+--
 -- Indexes for table `products`
 --
 ALTER TABLE `products`
@@ -256,6 +325,18 @@ ALTER TABLE `form_submissions`
 --
 ALTER TABLE `orders`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `hero_sections`
+--
+ALTER TABLE `hero_sections`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- AUTO_INCREMENT for table `homepage_sections`
+--
+ALTER TABLE `homepage_sections`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `products`

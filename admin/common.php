@@ -99,6 +99,39 @@ function ensure_admin_tables(mysqli $db): void
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB",
+        "CREATE TABLE IF NOT EXISTS hero_slides (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(220) NOT NULL,
+            subtitle VARCHAR(220) DEFAULT '',
+            description TEXT,
+            cta_text VARCHAR(80) DEFAULT 'Shop Now',
+            cta_link VARCHAR(255) DEFAULT '#featured-products',
+            image_path VARCHAR(255) DEFAULT '',
+            sort_order INT NOT NULL DEFAULT 0,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB",
+        "CREATE TABLE IF NOT EXISTS hero_sections (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(220) NOT NULL,
+            subtitle VARCHAR(220) DEFAULT '',
+            button_text VARCHAR(80) DEFAULT 'Shop Now',
+            button_link VARCHAR(255) DEFAULT '#featured-products',
+            image VARCHAR(255) DEFAULT '',
+            sort_order INT NOT NULL DEFAULT 0,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB",
+        "CREATE TABLE IF NOT EXISTS homepage_sections (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            section_name VARCHAR(120) NOT NULL UNIQUE,
+            is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+            display_order INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB",
     ];
 
     foreach ($queries as $query) {
@@ -111,6 +144,30 @@ function ensure_admin_tables(mysqli $db): void
     }
     if ($columnCheck instanceof mysqli_result) {
         $columnCheck->free();
+    }
+
+    $featuredCheck = $db->query("SHOW COLUMNS FROM products LIKE 'is_featured'");
+    if ($featuredCheck instanceof mysqli_result && $featuredCheck->num_rows === 0) {
+        $db->query("ALTER TABLE products ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active");
+    }
+    if ($featuredCheck instanceof mysqli_result) {
+        $featuredCheck->free();
+    }
+
+    $isNewCheck = $db->query("SHOW COLUMNS FROM products LIKE 'is_new'");
+    if ($isNewCheck instanceof mysqli_result && $isNewCheck->num_rows === 0) {
+        $db->query("ALTER TABLE products ADD COLUMN is_new TINYINT(1) NOT NULL DEFAULT 0 AFTER is_featured");
+    }
+    if ($isNewCheck instanceof mysqli_result) {
+        $isNewCheck->free();
+    }
+
+    $displaySectionCheck = $db->query("SHOW COLUMNS FROM products LIKE 'display_section'");
+    if ($displaySectionCheck instanceof mysqli_result && $displaySectionCheck->num_rows === 0) {
+        $db->query("ALTER TABLE products ADD COLUMN display_section ENUM('home','new_arrivals','featured','none') NOT NULL DEFAULT 'home' AFTER is_new");
+    }
+    if ($displaySectionCheck instanceof mysqli_result) {
+        $displaySectionCheck->free();
     }
 
     $userGoogleIdCheck = $db->query("SHOW COLUMNS FROM users LIKE 'google_id'");
@@ -144,6 +201,50 @@ function ensure_admin_tables(mysqli $db): void
     }
     if ($seedCategory instanceof mysqli_result) {
         $seedCategory->free();
+    }
+
+    $seedHomeSections = $db->query('SELECT id FROM homepage_sections LIMIT 1');
+    if ($seedHomeSections instanceof mysqli_result && $seedHomeSections->num_rows === 0) {
+        $db->query("INSERT INTO homepage_sections (section_name, is_enabled, display_order) VALUES
+            ('hero', 1, 1),
+            ('products_from_admin', 1, 2),
+            ('new_arrivals', 1, 3),
+            ('featured', 1, 4),
+            ('categories_sidebar', 1, 5)");
+    }
+    if ($seedHomeSections instanceof mysqli_result) {
+        $seedHomeSections->free();
+    }
+
+    $heroSeed = $db->query('SELECT id FROM hero_sections LIMIT 1');
+    if ($heroSeed instanceof mysqli_result && $heroSeed->num_rows === 0) {
+        $legacySlides = $db->query('SELECT title, subtitle, cta_text, cta_link, image_path, sort_order, is_active FROM hero_slides ORDER BY sort_order ASC, id ASC');
+        if ($legacySlides instanceof mysqli_result && $legacySlides->num_rows > 0) {
+            while ($slide = $legacySlides->fetch_assoc()) {
+                $title = (string) ($slide['title'] ?? '');
+                $subtitle = (string) ($slide['subtitle'] ?? '');
+                $buttonText = (string) ($slide['cta_text'] ?? 'Shop Now');
+                $buttonLink = (string) ($slide['cta_link'] ?? '#featured-products');
+                $image = (string) ($slide['image_path'] ?? '');
+                $sortOrder = (int) ($slide['sort_order'] ?? 0);
+                $isActive = (int) ($slide['is_active'] ?? 1);
+                $stmt = $db->prepare('INSERT INTO hero_sections (title, subtitle, button_text, button_link, image, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)');
+                if ($stmt) {
+                    $stmt->bind_param('sssssii', $title, $subtitle, $buttonText, $buttonLink, $image, $sortOrder, $isActive);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+            $legacySlides->free();
+        } else {
+            $db->query("INSERT INTO hero_sections (title, subtitle, button_text, button_link, image, sort_order, is_active) VALUES
+                ('Tones of Shop UI Features Designed', '', 'Shop Now', '#featured-products', 'assets/pages/img/shop-slider/slide1/bg.jpg', 1, 1),
+                ('Unlimited Layout Options', 'Fully Responsive', 'Shop Now', '#featured-products', 'assets/pages/img/shop-slider/slide2/bg.jpg', 2, 1),
+                ('Full Admin and Frontend eCommerce UI', '', 'Shop Now', '#featured-products', 'assets/pages/img/shop-slider/slide3/bg.jpg', 3, 1)");
+        }
+    }
+    if ($heroSeed instanceof mysqli_result) {
+        $heroSeed->free();
     }
 }
 

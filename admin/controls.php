@@ -47,8 +47,49 @@ function handle_product_image_upload(string $fieldName, ?string $currentPath = n
     return 'uploads/products/' . $newName;
 }
 
+function handle_hero_image_upload(string $fieldName, ?string $currentPath = null): ?string
+{
+    if (!isset($_FILES[$fieldName]) || !is_array($_FILES[$fieldName])) {
+        return $currentPath;
+    }
+
+    $file = $_FILES[$fieldName];
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) {
+        return $currentPath;
+    }
+    if ($error !== UPLOAD_ERR_OK) {
+        return $currentPath;
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        return $currentPath;
+    }
+
+    $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    $originalName = (string) ($file['name'] ?? '');
+    $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowed, true)) {
+        return $currentPath;
+    }
+
+    $uploadDir = __DIR__ . '/../uploads/hero';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
+    $newName = 'hero_' . time() . '_' . uniqid('', true) . '.' . $ext;
+    $destination = $uploadDir . '/' . $newName;
+    if (!move_uploaded_file($tmpName, $destination)) {
+        return $currentPath;
+    }
+
+    return 'uploads/hero/' . $newName;
+}
+
 $section = (string) ($_GET['section'] ?? 'products');
-$allowedSections = ['products', 'categories', 'users', 'orders', 'stock', 'coupons'];
+$allowedSections = ['products', 'categories', 'users', 'orders', 'stock', 'coupons', 'hero', 'homepage_sections'];
 if (!in_array($section, $allowedSections, true)) {
     $section = 'products';
 }
@@ -110,6 +151,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $stock = (int) ($_POST['stock_qty'] ?? 0);
             $description = trim((string) ($_POST['description'] ?? ''));
             $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $isFeatured = isset($_POST['is_featured']) ? 1 : 0;
+            $isNew = isset($_POST['is_new']) ? 1 : 0;
+            $displaySection = (string) ($_POST['display_section'] ?? 'home');
+            $allowedDisplaySections = ['home', 'new_arrivals', 'featured', 'none'];
+            if (!in_array($displaySection, $allowedDisplaySections, true)) {
+                $displaySection = 'home';
+            }
             $imagePath = handle_product_image_upload('image_file', '');
 
             if ($name === '' || $sku === '') {
@@ -117,11 +165,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             } else {
                 $cat = $categoryId > 0 ? $categoryId : null;
                 $stmt = $db->prepare(
-                    'INSERT INTO products (category_id, name, sku, image_path, description, price, stock_qty, is_active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO products (category_id, name, sku, image_path, description, price, stock_qty, is_active, is_featured, is_new, display_section)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 if ($stmt) {
-                    $stmt->bind_param('issssdii', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive);
+                    $stmt->bind_param('issssdiiiis', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $isFeatured, $isNew, $displaySection);
                     $ok = $stmt->execute();
                     $stmt->close();
                     admin_flash_set($ok ? 'Product added.' : 'Could not add product (SKU must be unique).', $ok ? 'success' : 'error');
@@ -136,6 +184,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $stock = (int) ($_POST['stock_qty'] ?? 0);
             $description = trim((string) ($_POST['description'] ?? ''));
             $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $isFeatured = isset($_POST['is_featured']) ? 1 : 0;
+            $isNew = isset($_POST['is_new']) ? 1 : 0;
+            $displaySection = (string) ($_POST['display_section'] ?? 'home');
+            $allowedDisplaySections = ['home', 'new_arrivals', 'featured', 'none'];
+            if (!in_array($displaySection, $allowedDisplaySections, true)) {
+                $displaySection = 'home';
+            }
             $currentImage = trim((string) ($_POST['current_image_path'] ?? ''));
             $imagePath = handle_product_image_upload('image_file', $currentImage);
 
@@ -143,11 +198,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 $cat = $categoryId > 0 ? $categoryId : null;
                 $stmt = $db->prepare(
                     'UPDATE products
-                     SET category_id = ?, name = ?, sku = ?, image_path = ?, description = ?, price = ?, stock_qty = ?, is_active = ?
+                     SET category_id = ?, name = ?, sku = ?, image_path = ?, description = ?, price = ?, stock_qty = ?, is_active = ?, is_featured = ?, is_new = ?, display_section = ?
                      WHERE id = ?'
                 );
                 if ($stmt) {
-                    $stmt->bind_param('issssdiii', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $id);
+                    $stmt->bind_param('issssdiiiisi', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $isFeatured, $isNew, $displaySection, $id);
                     $ok = $stmt->execute();
                     $stmt->close();
                     admin_flash_set($ok ? 'Product updated.' : 'Could not update product.', $ok ? 'success' : 'error');
@@ -305,12 +360,120 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         }
         admin_redirect('controls.php', ['section' => 'coupons']);
     }
+
+    if ($section === 'hero') {
+        if ($action === 'create_hero_slide') {
+            $title = trim((string) ($_POST['title'] ?? ''));
+            $subtitle = trim((string) ($_POST['subtitle'] ?? ''));
+            $buttonText = trim((string) ($_POST['button_text'] ?? 'Shop Now'));
+            $buttonLink = trim((string) ($_POST['button_link'] ?? '#featured-products'));
+            $sortOrder = (int) ($_POST['sort_order'] ?? 0);
+            $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $imagePath = handle_hero_image_upload('image_file', '');
+
+            if ($title === '') {
+                admin_flash_set('Slide title is required.', 'error');
+            } else {
+                $stmt = $db->prepare(
+                    'INSERT INTO hero_sections (title, subtitle, button_text, button_link, image, sort_order, is_active)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)'
+                );
+                if ($stmt) {
+                    $stmt->bind_param('sssssii', $title, $subtitle, $buttonText, $buttonLink, $imagePath, $sortOrder, $isActive);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Hero slide added.' : 'Could not add hero slide.', $ok ? 'success' : 'error');
+                }
+            }
+        } elseif ($action === 'update_hero_slide') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $title = trim((string) ($_POST['title'] ?? ''));
+            $subtitle = trim((string) ($_POST['subtitle'] ?? ''));
+            $buttonText = trim((string) ($_POST['button_text'] ?? 'Shop Now'));
+            $buttonLink = trim((string) ($_POST['button_link'] ?? '#featured-products'));
+            $sortOrder = (int) ($_POST['sort_order'] ?? 0);
+            $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $currentImage = trim((string) ($_POST['current_image'] ?? ''));
+            $imagePath = handle_hero_image_upload('image_file', $currentImage);
+
+            if ($id > 0 && $title !== '') {
+                $stmt = $db->prepare(
+                    'UPDATE hero_sections
+                     SET title = ?, subtitle = ?, button_text = ?, button_link = ?, image = ?, sort_order = ?, is_active = ?
+                     WHERE id = ?'
+                );
+                if ($stmt) {
+                    $stmt->bind_param('sssssiii', $title, $subtitle, $buttonText, $buttonLink, $imagePath, $sortOrder, $isActive, $id);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Hero slide updated.' : 'Could not update hero slide.', $ok ? 'success' : 'error');
+                }
+            }
+        } elseif ($action === 'delete_hero_slide') {
+            $id = (int) ($_POST['id'] ?? 0);
+            if ($id > 0) {
+                $stmt = $db->prepare('DELETE FROM hero_sections WHERE id = ?');
+                if ($stmt) {
+                    $stmt->bind_param('i', $id);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Hero slide deleted.' : 'Could not delete hero slide.', $ok ? 'success' : 'error');
+                }
+            }
+        }
+        admin_redirect('controls.php', ['section' => 'hero']);
+    }
+
+    if ($section === 'homepage_sections') {
+        if ($action === 'create_homepage_section') {
+            $sectionName = trim((string) ($_POST['section_name'] ?? ''));
+            $isEnabled = isset($_POST['is_enabled']) ? 1 : 0;
+            $displayOrder = (int) ($_POST['display_order'] ?? 0);
+            if ($sectionName === '') {
+                admin_flash_set('Section name is required.', 'error');
+            } else {
+                $stmt = $db->prepare('INSERT INTO homepage_sections (section_name, is_enabled, display_order) VALUES (?, ?, ?)');
+                if ($stmt) {
+                    $stmt->bind_param('sii', $sectionName, $isEnabled, $displayOrder);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Homepage section added.' : 'Could not add section (name must be unique).', $ok ? 'success' : 'error');
+                }
+            }
+        } elseif ($action === 'update_homepage_section') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $sectionName = trim((string) ($_POST['section_name'] ?? ''));
+            $isEnabled = isset($_POST['is_enabled']) ? 1 : 0;
+            $displayOrder = (int) ($_POST['display_order'] ?? 0);
+            if ($id > 0 && $sectionName !== '') {
+                $stmt = $db->prepare('UPDATE homepage_sections SET section_name = ?, is_enabled = ?, display_order = ? WHERE id = ?');
+                if ($stmt) {
+                    $stmt->bind_param('siii', $sectionName, $isEnabled, $displayOrder, $id);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Homepage section updated.' : 'Could not update section.', $ok ? 'success' : 'error');
+                }
+            }
+        } elseif ($action === 'delete_homepage_section') {
+            $id = (int) ($_POST['id'] ?? 0);
+            if ($id > 0) {
+                $stmt = $db->prepare('DELETE FROM homepage_sections WHERE id = ?');
+                if ($stmt) {
+                    $stmt->bind_param('i', $id);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Homepage section deleted.' : 'Could not delete section.', $ok ? 'success' : 'error');
+                }
+            }
+        }
+        admin_redirect('controls.php', ['section' => 'homepage_sections']);
+    }
 }
 
 $flash = admin_flash_get();
 $categories = $db->query('SELECT id, name, slug, is_active, created_at FROM categories ORDER BY id DESC');
 $products = $db->query(
-    'SELECT p.id, p.name, p.sku, p.image_path, p.price, p.stock_qty, p.is_active, p.description, p.created_at, p.category_id, c.name AS category_name
+    'SELECT p.id, p.name, p.sku, p.image_path, p.price, p.stock_qty, p.is_active, p.is_featured, p.is_new, p.display_section, p.description, p.created_at, p.category_id, c.name AS category_name
      FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
      ORDER BY p.id DESC'
@@ -318,6 +481,8 @@ $products = $db->query(
 $users = $db->query('SELECT id, full_name, email, phone, status, created_at FROM users ORDER BY id DESC');
 $orders = $db->query('SELECT id, order_number, user_id, customer_name, customer_email, total_amount, status, created_at FROM orders ORDER BY id DESC');
 $coupons = $db->query('SELECT id, code, discount_type, discount_value, start_date, end_date, usage_limit, is_active, created_at FROM coupons ORDER BY id DESC');
+$heroSlides = $db->query('SELECT id, title, subtitle, button_text, button_link, image, sort_order, is_active, created_at FROM hero_sections ORDER BY sort_order ASC, id DESC');
+$homepageSections = $db->query('SELECT id, section_name, is_enabled, display_order, created_at FROM homepage_sections ORDER BY display_order ASC, id ASC');
 ?>
 <!doctype html>
 <html lang="en">
@@ -369,6 +534,8 @@ $coupons = $db->query('SELECT id, code, discount_type, discount_value, start_dat
       <a class="<?php echo $section === 'orders' ? 'active' : ''; ?>" href="controls.php?section=orders">Orders</a>
       <a class="<?php echo $section === 'stock' ? 'active' : ''; ?>" href="controls.php?section=stock">Stock</a>
       <a class="<?php echo $section === 'coupons' ? 'active' : ''; ?>" href="controls.php?section=coupons">Offers/Coupons</a>
+      <a class="<?php echo $section === 'hero' ? 'active' : ''; ?>" href="controls.php?section=hero">Hero Management</a>
+      <a class="<?php echo $section === 'homepage_sections' ? 'active' : ''; ?>" href="controls.php?section=homepage_sections">Homepage Sections</a>
     </div>
 
     <?php if ($flash): ?>
@@ -443,19 +610,29 @@ $coupons = $db->query('SELECT id, code, discount_type, discount_value, start_dat
             <div><input type="number" name="stock_qty" placeholder="Stock" value="0" required></div>
             <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
             <div><label><input type="checkbox" name="is_active" checked> Active</label></div>
+            <div><label><input type="checkbox" name="is_featured"> Featured</label></div>
+            <div><label><input type="checkbox" name="is_new"> New Arrival</label></div>
+            <div>
+              <select name="display_section">
+                <option value="home">Home</option>
+                <option value="new_arrivals">New Arrivals</option>
+                <option value="featured">Featured</option>
+                <option value="none">None</option>
+              </select>
+            </div>
           </div>
           <div class="mt"><textarea name="description" placeholder="Description"></textarea></div>
           <div class="mt"><button class="btn btn-primary" type="submit">Add Product</button></div>
         </form>
         <table>
-          <thead><tr><th>ID</th><th>Name</th><th>SKU</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead>
+          <thead><tr><th>ID</th><th>Name</th><th>SKU</th><th>Category</th><th>Price</th><th>Stock</th><th>Flags</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>
             <?php if (!$products || $products->num_rows === 0): ?>
-              <tr><td colspan="8">No products found.</td></tr>
+              <tr><td colspan="9">No products found.</td></tr>
             <?php else: while ($row = $products->fetch_assoc()): ?>
               <tr>
                 <td><?php echo (int) $row['id']; ?></td>
-                <td colspan="6">
+                <td colspan="7">
                   <form method="post" action="controls.php?section=products" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="update_product">
                     <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
@@ -477,6 +654,17 @@ $coupons = $db->query('SELECT id, code, discount_type, discount_value, start_dat
                       <div><input type="number" name="stock_qty" value="<?php echo (int) $row['stock_qty']; ?>" required></div>
                       <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
                       <div><label><input type="checkbox" name="is_active" <?php echo (int) $row['is_active'] === 1 ? 'checked' : ''; ?>> Active</label></div>
+                      <div><label><input type="checkbox" name="is_featured" <?php echo (int) ($row['is_featured'] ?? 0) === 1 ? 'checked' : ''; ?>> Featured</label></div>
+                      <div><label><input type="checkbox" name="is_new" <?php echo (int) ($row['is_new'] ?? 0) === 1 ? 'checked' : ''; ?>> New Arrival</label></div>
+                      <div>
+                        <select name="display_section">
+                          <?php $displaySectionValue = (string) ($row['display_section'] ?? 'home'); ?>
+                          <option value="home" <?php echo $displaySectionValue === 'home' ? 'selected' : ''; ?>>Home</option>
+                          <option value="new_arrivals" <?php echo $displaySectionValue === 'new_arrivals' ? 'selected' : ''; ?>>New Arrivals</option>
+                          <option value="featured" <?php echo $displaySectionValue === 'featured' ? 'selected' : ''; ?>>Featured</option>
+                          <option value="none" <?php echo $displaySectionValue === 'none' ? 'selected' : ''; ?>>None</option>
+                        </select>
+                      </div>
                     </div>
                     <?php if ((string) $row['image_path'] !== ''): ?>
                       <div class="mt">
@@ -672,6 +860,129 @@ $coupons = $db->query('SELECT id, code, discount_type, discount_value, start_dat
                 <td>
                   <form class="inline" method="post" action="controls.php?section=coupons">
                     <input type="hidden" name="action" value="delete_coupon">
+                    <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
+                    <button class="btn btn-danger" type="submit">Delete</button>
+                  </form>
+                </td>
+              </tr>
+            <?php endwhile; endif; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($section === 'hero'): ?>
+      <div class="panel">
+        <h3>Homepage Hero Slider</h3>
+        <form method="post" action="controls.php?section=hero" enctype="multipart/form-data">
+          <input type="hidden" name="action" value="create_hero_slide">
+          <div class="grid-4">
+            <div><input type="text" name="title" placeholder="Slide title" required></div>
+            <div><input type="text" name="subtitle" placeholder="Slide subtitle"></div>
+            <div><input type="text" name="button_text" placeholder="Button text (e.g. Shop Now)" value="Shop Now"></div>
+            <div><input type="text" name="button_link" placeholder="Button link" value="#featured-products"></div>
+            <div><input type="number" name="sort_order" placeholder="Sort order" value="0"></div>
+            <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
+            <div><label><input type="checkbox" name="is_active" checked> Active</label></div>
+          </div>
+          <div class="mt"><button class="btn btn-primary" type="submit">Add Hero Slide</button></div>
+        </form>
+
+        <table>
+          <thead><tr><th>ID</th><th>Slide Content</th><th>Preview</th><th>Action</th></tr></thead>
+          <tbody>
+            <?php if (!$heroSlides || $heroSlides->num_rows === 0): ?>
+              <tr><td colspan="4">No hero slides found. Add your first slide.</td></tr>
+            <?php else: while ($row = $heroSlides->fetch_assoc()): ?>
+              <tr>
+                <td><?php echo (int) $row['id']; ?></td>
+                <td>
+                  <form method="post" action="controls.php?section=hero" enctype="multipart/form-data">
+                    <input type="hidden" name="action" value="update_hero_slide">
+                    <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
+                    <input type="hidden" name="current_image" value="<?php echo admin_h((string) $row['image']); ?>">
+                    <div class="grid-4">
+                      <div><input type="text" name="title" value="<?php echo admin_h((string) $row['title']); ?>" required></div>
+                      <div><input type="text" name="subtitle" value="<?php echo admin_h((string) $row['subtitle']); ?>"></div>
+                      <div><input type="text" name="button_text" value="<?php echo admin_h((string) $row['button_text']); ?>"></div>
+                      <div><input type="text" name="button_link" value="<?php echo admin_h((string) $row['button_link']); ?>"></div>
+                      <div><input type="number" name="sort_order" value="<?php echo (int) $row['sort_order']; ?>"></div>
+                      <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
+                      <div><label><input type="checkbox" name="is_active" <?php echo (int) $row['is_active'] === 1 ? 'checked' : ''; ?>> Active</label></div>
+                    </div>
+                    <div class="mt"><button class="btn btn-muted" type="submit">Update Slide</button></div>
+                  </form>
+                </td>
+                <td style="min-width:170px;">
+                  <?php if ((string) $row['image'] !== ''): ?>
+                    <img src="../<?php echo admin_h((string) $row['image']); ?>" alt="hero" style="max-height:80px;border:1px solid #ddd;padding:2px;">
+                  <?php else: ?>
+                    <small>No image set</small>
+                  <?php endif; ?>
+                  <div class="mt"><small><?php echo (int) $row['is_active'] === 1 ? 'Active' : 'Inactive'; ?></small></div>
+                </td>
+                <td>
+                  <form class="inline" method="post" action="controls.php?section=hero">
+                    <input type="hidden" name="action" value="delete_hero_slide">
+                    <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
+                    <button class="btn btn-danger" type="submit">Delete</button>
+                  </form>
+                </td>
+              </tr>
+            <?php endwhile; endif; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($section === 'homepage_sections'): ?>
+      <div class="panel">
+        <h3>Homepage Sections</h3>
+        <p>Control which homepage blocks are enabled and in what order they appear.</p>
+        <form method="post" action="controls.php?section=homepage_sections">
+          <input type="hidden" name="action" value="create_homepage_section">
+          <div class="grid-4">
+            <div>
+              <select name="section_name" required>
+                <option value="hero">hero</option>
+                <option value="products_from_admin">products_from_admin</option>
+                <option value="new_arrivals">new_arrivals</option>
+                <option value="featured">featured</option>
+                <option value="categories_sidebar">categories_sidebar</option>
+              </select>
+            </div>
+            <div><input type="number" name="display_order" value="0" placeholder="Display order"></div>
+            <div><label><input type="checkbox" name="is_enabled" checked> Enabled</label></div>
+            <div><button class="btn btn-primary" type="submit">Add Section</button></div>
+          </div>
+        </form>
+
+        <table>
+          <thead><tr><th>ID</th><th>Section</th><th>Enabled</th><th>Display Order</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody>
+            <?php if (!$homepageSections || $homepageSections->num_rows === 0): ?>
+              <tr><td colspan="6">No homepage sections found.</td></tr>
+            <?php else: while ($row = $homepageSections->fetch_assoc()): ?>
+              <tr>
+                <td><?php echo (int) $row['id']; ?></td>
+                <td colspan="4">
+                  <form method="post" action="controls.php?section=homepage_sections">
+                    <input type="hidden" name="action" value="update_homepage_section">
+                    <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
+                    <div class="grid-4">
+                      <div>
+                        <input type="text" name="section_name" value="<?php echo admin_h((string) $row['section_name']); ?>" required>
+                      </div>
+                      <div><label><input type="checkbox" name="is_enabled" <?php echo (int) $row['is_enabled'] === 1 ? 'checked' : ''; ?>> Enabled</label></div>
+                      <div><input type="number" name="display_order" value="<?php echo (int) $row['display_order']; ?>"></div>
+                      <div><small><?php echo admin_h((string) $row['created_at']); ?></small></div>
+                    </div>
+                    <div class="mt"><button class="btn btn-muted" type="submit">Update</button></div>
+                  </form>
+                </td>
+                <td>
+                  <form class="inline" method="post" action="controls.php?section=homepage_sections">
+                    <input type="hidden" name="action" value="delete_homepage_section">
                     <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
                     <button class="btn btn-danger" type="submit">Delete</button>
                   </form>

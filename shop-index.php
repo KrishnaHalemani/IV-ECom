@@ -8,16 +8,216 @@ function fe_h(string $value): string
 }
 
 $db = get_db_connection();
-$featuredProducts = [];
-$featuredResult = $db->query("SELECT id, name, image_path, price, stock_qty FROM products WHERE is_active = 1 ORDER BY id DESC LIMIT 8");
-if ($featuredResult === false) {
-    $featuredResult = $db->query("SELECT id, name, '' AS image_path, price, stock_qty FROM products WHERE is_active = 1 ORDER BY id DESC LIMIT 8");
-}
-if ($featuredResult instanceof mysqli_result) {
-    while ($row = $featuredResult->fetch_assoc()) {
-        $featuredProducts[] = $row;
+
+function normalize_home_section_key(string $name): string
+{
+    $key = strtolower(trim($name));
+    $key = preg_replace('/[^a-z0-9]+/', '_', $key) ?? '';
+    $key = trim($key, '_');
+
+    if ($key === 'products' || $key === 'home' || $key === 'home_products') {
+        return 'products_from_admin';
     }
-    $featuredResult->free();
+    if ($key === 'category_sidebar') {
+        return 'categories_sidebar';
+    }
+    if ($key === 'new' || $key === 'new_arrival') {
+        return 'new_arrivals';
+    }
+
+    return $key;
+}
+
+function display_home_section_title(string $sectionName, string $fallback): string
+{
+    $value = trim($sectionName);
+    if ($value === '') {
+        return $fallback;
+    }
+
+    $compact = strtolower(preg_replace('/[^a-z0-9]+/', '_', $value) ?? '');
+    $known = ['hero', 'products_from_admin', 'new_arrivals', 'featured', 'categories_sidebar'];
+    if (in_array($compact, $known, true)) {
+        return $fallback;
+    }
+
+    return ucwords(str_replace('_', ' ', $value));
+}
+
+$sectionDefaults = [
+    'hero' => ['title' => 'Hero', 'enabled' => true, 'order' => 1],
+    'products_from_admin' => ['title' => 'Products From Admin', 'enabled' => true, 'order' => 2],
+    'new_arrivals' => ['title' => 'New Arrivals', 'enabled' => true, 'order' => 3],
+    'featured' => ['title' => 'Featured', 'enabled' => true, 'order' => 4],
+    'categories_sidebar' => ['title' => 'Categories', 'enabled' => true, 'order' => 5],
+];
+
+$sectionConfig = $sectionDefaults;
+$sectionOrder = [];
+$sectionsResult = $db->query('SELECT section_name, is_enabled, display_order FROM homepage_sections ORDER BY display_order ASC, id ASC');
+if ($sectionsResult instanceof mysqli_result) {
+    while ($row = $sectionsResult->fetch_assoc()) {
+        $rawName = (string) ($row['section_name'] ?? '');
+        $key = normalize_home_section_key($rawName);
+        if (!isset($sectionConfig[$key])) {
+            continue;
+        }
+        $sectionConfig[$key]['enabled'] = (int) ($row['is_enabled'] ?? 0) === 1;
+        $sectionConfig[$key]['order'] = (int) ($row['display_order'] ?? $sectionConfig[$key]['order']);
+        $sectionConfig[$key]['title'] = display_home_section_title($rawName, $sectionConfig[$key]['title']);
+        $sectionOrder[] = $key;
+    }
+    $sectionsResult->free();
+}
+
+if ($sectionOrder === []) {
+    $sectionOrder = array_keys($sectionConfig);
+}
+
+usort($sectionOrder, static function (string $a, string $b) use ($sectionConfig): int {
+    $orderA = (int) ($sectionConfig[$a]['order'] ?? 9999);
+    $orderB = (int) ($sectionConfig[$b]['order'] ?? 9999);
+    if ($orderA === $orderB) {
+        return strcmp($a, $b);
+    }
+    return $orderA <=> $orderB;
+});
+$sectionOrder = array_values(array_unique($sectionOrder));
+
+$heroSlides = [];
+$heroResult = $db->query(
+    "SELECT id, title, subtitle, button_text, button_link, image
+     FROM hero_sections
+     WHERE is_active = 1
+     ORDER BY sort_order ASC, id DESC"
+);
+if ($heroResult instanceof mysqli_result) {
+    while ($row = $heroResult->fetch_assoc()) {
+        $heroSlides[] = $row;
+    }
+    $heroResult->free();
+}
+
+if ($heroSlides === []) {
+    $heroSlides = [
+        [
+            'id' => 1,
+            'title' => 'Tones of Shop UI Features Designed',
+            'subtitle' => 'Lorem ipsum dolor sit amet constectetuer diam adipiscing elit euismod ut laoreet dolore.',
+            'button_text' => 'Shop Now',
+            'button_link' => '#featured-products',
+            'image' => 'assets/pages/img/shop-slider/slide1/bg.jpg',
+        ],
+        [
+            'id' => 2,
+            'title' => 'Unlimited Layout Options',
+            'subtitle' => 'Build your storefront quickly with reusable components and production-ready layout blocks.',
+            'button_text' => 'Shop Now',
+            'button_link' => '#featured-products',
+            'image' => 'assets/pages/img/shop-slider/slide2/bg.jpg',
+        ],
+    ];
+}
+
+$selectedCategorySlug = trim((string) ($_GET['category'] ?? ''));
+$selectedCategoryId = 0;
+$categories = [];
+$categoriesResult = $db->query('SELECT id, name, slug, is_active FROM categories WHERE is_active = 1 ORDER BY name ASC');
+if ($categoriesResult instanceof mysqli_result) {
+    while ($row = $categoriesResult->fetch_assoc()) {
+        $categories[] = $row;
+        if ($selectedCategorySlug !== '' && $selectedCategorySlug === (string) $row['slug']) {
+            $selectedCategoryId = (int) $row['id'];
+        }
+    }
+    $categoriesResult->free();
+}
+
+$products = [];
+$productSql = "SELECT p.id, p.name, p.image_path, p.price, p.stock_qty, p.category_id, p.is_featured, p.is_new, p.display_section, c.name AS category_name
+               FROM products p
+               LEFT JOIN categories c ON c.id = p.category_id
+               WHERE p.is_active = 1";
+if ($selectedCategoryId > 0) {
+    $productSql .= ' AND p.category_id = ?';
+}
+$productSql .= ' ORDER BY p.id DESC LIMIT 60';
+
+$productStmt = $db->prepare($productSql);
+if ($productStmt instanceof mysqli_stmt) {
+    if ($selectedCategoryId > 0) {
+        $productStmt->bind_param('i', $selectedCategoryId);
+    }
+    if ($productStmt->execute()) {
+        $result = $productStmt->get_result();
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $products[] = $row;
+            }
+            $result->free();
+        }
+    }
+    $productStmt->close();
+}
+
+if ($products === []) {
+    $fallbackSql = 'SELECT id, name, image_path, price, stock_qty, category_id FROM products WHERE is_active = 1 ORDER BY id DESC LIMIT 20';
+    $fallbackResult = $db->query($fallbackSql);
+    if ($fallbackResult instanceof mysqli_result) {
+        while ($row = $fallbackResult->fetch_assoc()) {
+            $row['display_section'] = 'home';
+            $row['is_featured'] = 0;
+            $row['is_new'] = 0;
+            $row['category_name'] = 'General';
+            $products[] = $row;
+        }
+        $fallbackResult->free();
+    }
+}
+
+$homeProducts = [];
+$newArrivalProducts = [];
+$featuredProducts = [];
+$newSeen = [];
+$featuredSeen = [];
+
+foreach ($products as $product) {
+    $displaySection = (string) ($product['display_section'] ?? 'home');
+    $productId = (int) ($product['id'] ?? 0);
+    if ($productId <= 0 || $displaySection === 'none') {
+        continue;
+    }
+
+    if ($displaySection === 'new_arrivals') {
+        $newArrivalProducts[] = $product;
+        $newSeen[$productId] = true;
+        continue;
+    }
+
+    if ($displaySection === 'featured') {
+        $featuredProducts[] = $product;
+        $featuredSeen[$productId] = true;
+        continue;
+    }
+
+    $homeProducts[] = $product;
+}
+
+foreach ($products as $product) {
+    $productId = (int) ($product['id'] ?? 0);
+    if ($productId <= 0) {
+        continue;
+    }
+
+    if ((int) ($product['is_new'] ?? 0) === 1 && !isset($newSeen[$productId])) {
+        $newArrivalProducts[] = $product;
+        $newSeen[$productId] = true;
+    }
+
+    if ((int) ($product['is_featured'] ?? 0) === 1 && !isset($featuredSeen[$productId])) {
+        $featuredProducts[] = $product;
+        $featuredSeen[$productId] = true;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -440,83 +640,50 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
     </div>
     <!-- Header END -->
 
+    <?php if (!empty($sectionConfig['hero']['enabled'])): ?>
     <!-- BEGIN SLIDER -->
     <div class="page-slider margin-bottom-35">
         <div id="carousel-example-generic" class="carousel slide carousel-slider">
             <!-- Indicators -->
             <ol class="carousel-indicators">
-                <li data-target="#carousel-example-generic" data-slide-to="0" class="active"></li>
-                <li data-target="#carousel-example-generic" data-slide-to="1"></li>
-                <li data-target="#carousel-example-generic" data-slide-to="2"></li>
-                <li data-target="#carousel-example-generic" data-slide-to="3"></li>
+                <?php foreach ($heroSlides as $i => $slide): ?>
+                  <li data-target="#carousel-example-generic" data-slide-to="<?php echo (int) $i; ?>" class="<?php echo $i === 0 ? 'active' : ''; ?>"></li>
+                <?php endforeach; ?>
             </ol>
 
             <!-- Wrapper for slides -->
             <div class="carousel-inner" role="listbox">
-                <!-- First slide -->
-                <div class="item carousel-item-four active">
+                <?php foreach ($heroSlides as $i => $slide): ?>
+                  <?php
+                  $imagePath = trim((string) ($slide['image'] ?? ($slide['image_path'] ?? '')));
+                  if ($imagePath === '') {
+                      $imagePath = 'assets/pages/img/shop-slider/slide1/bg.jpg';
+                  }
+                  $title = trim((string) ($slide['title'] ?? ''));
+                  $subtitle = trim((string) ($slide['subtitle'] ?? ''));
+                  $description = trim((string) ($slide['description'] ?? ''));
+                  $ctaText = trim((string) ($slide['button_text'] ?? ($slide['cta_text'] ?? 'Shop Now')));
+                  $ctaLink = trim((string) ($slide['button_link'] ?? ($slide['cta_link'] ?? '#featured-products')));
+                  ?>
+                  <div class="item carousel-item-admin <?php echo $i === 0 ? 'active' : ''; ?>" style="background: url('<?php echo fe_h($imagePath); ?>') center center no-repeat; background-size: cover;">
                     <div class="container">
-                        <div class="carousel-position-four text-center">
-                            <h2 class="margin-bottom-20 animate-delay carousel-title-v3 border-bottom-title text-uppercase" data-animation="animated fadeInDown">
-                                Tones of <br/><span class="color-red-v2">Shop UI Features</span><br/> designed
-                            </h2>
-                            <p class="carousel-subtitle-v2" data-animation="animated fadeInUp">Lorem ipsum dolor sit amet constectetuer diam <br/>
-                            adipiscing elit euismod ut laoreet dolore.</p>
-                            <a class="carousel-btn" href="#featured-products" data-shop-cta="true" data-animation="animated fadeInUp">Shop Now</a>
-                        </div>
+                      <div class="carousel-position-four text-center">
+                        <?php if ($title !== ''): ?>
+                          <h2 class="margin-bottom-20 animate-delay carousel-title-v3 border-bottom-title text-uppercase" data-animation="animated fadeInDown">
+                            <?php echo nl2br(fe_h($title)); ?>
+                          </h2>
+                        <?php endif; ?>
+                        <?php if ($subtitle !== ''): ?>
+                          <p class="carousel-subtitle-v3 margin-bottom-15" data-animation="animated fadeInDown"><?php echo fe_h($subtitle); ?></p>
+                        <?php endif; ?>
+                        <?php if ($description !== ''): ?>
+                          <p class="carousel-subtitle-v2" data-animation="animated fadeInUp"><?php echo nl2br(fe_h($description)); ?></p>
+                        <?php endif; ?>
+                        <a class="carousel-btn" href="<?php echo fe_h($ctaLink !== '' ? $ctaLink : '#featured-products'); ?>" data-shop-cta="true" data-animation="animated fadeInUp"><?php echo fe_h($ctaText !== '' ? $ctaText : 'Shop Now'); ?></a>
+                      </div>
                     </div>
-                </div>
-                
-                <!-- Second slide -->
-                <div class="item carousel-item-five">
-                    <div class="container">
-                        <div class="carousel-position-four text-center">
-                            <h2 class="animate-delay carousel-title-v4" data-animation="animated fadeInDown">
-                                Unlimted
-                            </h2>
-                            <p class="carousel-subtitle-v2" data-animation="animated fadeInDown">
-                                Layout Options
-                            </p>
-                            <p class="carousel-subtitle-v3 margin-bottom-30" data-animation="animated fadeInUp">
-                                Fully Responsive
-                            </p>
-                            <a class="carousel-btn" href="#" data-animation="animated fadeInUp">See More Details</a>
-                        </div>
-                        <img class="carousel-position-five animate-delay hidden-sm hidden-xs" src="assets/pages/img/shop-slider/slide2/price.png" alt="Price" data-animation="animated zoomIn">
-                    </div>
-                </div>
-
-                <!-- Third slide -->
-                <div class="item carousel-item-six">
-                    <div class="container">
-                        <div class="carousel-position-four text-center">
-                            <span class="carousel-subtitle-v3 margin-bottom-15" data-animation="animated fadeInDown">
-                                Full Admin &amp; Frontend
-                            </span>
-                            <p class="carousel-subtitle-v4" data-animation="animated fadeInDown">
-                                eCommerce UI
-                            </p>
-                            <p class="carousel-subtitle-v3" data-animation="animated fadeInDown">
-                                Is Ready For Your Project
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Fourth slide -->
-                <div class="item carousel-item-seven">
-                   <div class="center-block">
-                        <div class="center-block-wrap">
-                            <div class="center-block-body">
-                                <h2 class="carousel-title-v1 margin-bottom-20" data-animation="animated fadeInDown">
-                                    The most <br/>
-                                    wanted bijouterie
-                                </h2>
-                                <a class="carousel-btn" href="#" data-animation="animated fadeInUp">But It Now!</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                  </div>
+                <?php endforeach; ?>
             </div>
 
             <!-- Controls -->
@@ -529,423 +696,198 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
         </div>
     </div>
     <!-- END SLIDER -->
+    <?php endif; ?>
 
     <div class="main shop-main-content">
       <div class="container">
-        <?php if ($featuredProducts !== []): ?>
-          <div class="row margin-bottom-40 featured-products-section" id="featured-products">
-            <div class="col-md-12 sale-product">
-              <h2>Products From Admin</h2>
-              <div class="row product-list js-product-grid">
-                <?php foreach ($featuredProducts as $product): ?>
-                  <?php $img = trim((string) ($product['image_path'] ?? '')) !== '' ? (string) $product['image_path'] : 'assets/pages/img/products/model1.jpg'; ?>
-                  <div class="col-md-3 col-sm-6 col-xs-12">
-                    <div class="product-item"
-                      data-product-id="<?php echo (int) $product['id']; ?>"
-                      data-product-price="<?php echo number_format((float) $product['price'], 2, '.', ''); ?>"
-                      data-stock="<?php echo (int) $product['stock_qty']; ?>"
-                      data-category="Featured">
-                      <div class="pi-img-wrapper">
-                        <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) $product['name']); ?>" loading="lazy" decoding="async">
-                        <div>
-                          <a href="<?php echo fe_h($img); ?>" class="btn btn-default fancybox-button">Zoom</a>
-                          <a href="shop-item.php?id=<?php echo (int) $product['id']; ?>" class="btn btn-default js-quick-view">Quick View</a>
+        <?php
+          $hasRenderedMainSection = false;
+          $homeRendered = false;
+          $categoriesEnabled = (bool) ($sectionConfig['categories_sidebar']['enabled'] ?? true);
+          $productsSectionTitle = (string) ($sectionConfig['products_from_admin']['title'] ?? 'Products From Admin');
+          $newArrivalsTitle = (string) ($sectionConfig['new_arrivals']['title'] ?? 'New Arrivals');
+          $featuredTitle = (string) ($sectionConfig['featured']['title'] ?? 'Featured');
+        ?>
+
+        <?php foreach ($sectionOrder as $sectionKey): ?>
+          <?php if (empty($sectionConfig[$sectionKey]['enabled'])): ?>
+            <?php continue; ?>
+          <?php endif; ?>
+
+          <?php if ($sectionKey === 'products_from_admin' || ($sectionKey === 'categories_sidebar' && empty($sectionConfig['products_from_admin']['enabled']))): ?>
+            <?php if ($homeRendered): ?>
+              <?php continue; ?>
+            <?php endif; ?>
+            <?php $homeRendered = true; $hasRenderedMainSection = true; ?>
+            <div class="row margin-bottom-40 featured-products-section" id="featured-products">
+              <?php if ($categoriesEnabled): ?>
+                <div class="sidebar col-md-3 col-sm-4">
+                  <ul class="list-group margin-bottom-25 sidebar-menu">
+                    <li class="list-group-item clearfix<?php echo $selectedCategorySlug === '' ? ' active' : ''; ?>">
+                      <a href="shop-index.php#featured-products"><i class="fa fa-angle-right"></i> All Categories</a>
+                    </li>
+                    <?php foreach ($categories as $category): ?>
+                      <?php
+                        $catSlug = (string) ($category['slug'] ?? '');
+                        $catName = trim((string) ($category['name'] ?? 'Category'));
+                        if ($catSlug === '' || $catName === '') {
+                            continue;
+                        }
+                      ?>
+                      <li class="list-group-item clearfix<?php echo $selectedCategorySlug === $catSlug ? ' active' : ''; ?>">
+                        <a href="shop-index.php?category=<?php echo rawurlencode($catSlug); ?>#featured-products"><i class="fa fa-angle-right"></i> <?php echo fe_h($catName); ?></a>
+                      </li>
+                    <?php endforeach; ?>
+                  </ul>
+                  <div class="sidebar-filter"></div>
+                </div>
+              <?php endif; ?>
+
+              <div class="<?php echo $categoriesEnabled ? 'col-md-9 col-sm-8' : 'col-md-12'; ?> sale-product">
+                <h2><?php echo fe_h($productsSectionTitle); ?></h2>
+                <?php if ($homeProducts !== []): ?>
+                  <div class="row product-list js-product-grid js-catalog-grid">
+                    <?php foreach ($homeProducts as $product): ?>
+                      <?php
+                        $img = trim((string) ($product['image_path'] ?? ''));
+                        if ($img === '') {
+                            $img = 'assets/pages/img/products/model1.jpg';
+                        }
+                        $categoryName = trim((string) ($product['category_name'] ?? 'General'));
+                        if ($categoryName === '') {
+                            $categoryName = 'General';
+                        }
+                        $productId = (int) ($product['id'] ?? 0);
+                      ?>
+                      <div class="col-md-4 col-sm-6 col-xs-12">
+                        <div class="product-item"
+                          data-product-id="<?php echo $productId; ?>"
+                          data-product-price="<?php echo number_format((float) ($product['price'] ?? 0), 2, '.', ''); ?>"
+                          data-stock="<?php echo (int) ($product['stock_qty'] ?? 0); ?>"
+                          data-category="<?php echo fe_h($categoryName); ?>">
+                          <div class="pi-img-wrapper">
+                            <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            <div>
+                              <a href="<?php echo fe_h($img); ?>" class="btn btn-default fancybox-button">Zoom</a>
+                              <a href="shop-item.php?id=<?php echo $productId; ?>" class="btn btn-default js-quick-view">Quick View</a>
+                            </div>
+                          </div>
+                          <h3><a href="shop-item.php?id=<?php echo $productId; ?>"><?php echo fe_h((string) ($product['name'] ?? 'Product')); ?></a></h3>
+                          <div class="pi-price">$<?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
+                          <p class="product-meta"><?php echo fe_h($categoryName); ?> | <?php echo (int) ($product['stock_qty'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?></p>
+                          <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo $productId; ?>">Add to cart</button>
+                          <a href="shop-item.php?id=<?php echo $productId; ?>" class="btn btn-default">Details</a>
                         </div>
                       </div>
-                      <h3><a href="shop-item.php?id=<?php echo (int) $product['id']; ?>"><?php echo fe_h((string) $product['name']); ?></a></h3>
-                      <div class="pi-price">$<?php echo number_format((float) $product['price'], 2); ?></div>
-                      <p class="product-meta">Featured | <?php echo (int) $product['stock_qty'] > 0 ? 'In Stock' : 'Out of Stock'; ?></p>
-                      <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo (int) $product['id']; ?>">Add to cart</button>
-                      <a href="shop-item.php?id=<?php echo (int) $product['id']; ?>" class="btn btn-default">Details</a>
-                    </div>
+                    <?php endforeach; ?>
                   </div>
-                <?php endforeach; ?>
+                <?php else: ?>
+                  <div class="shop-filter-empty" style="display:block;">No products found for the selected category.</div>
+                <?php endif; ?>
               </div>
             </div>
-          </div>
-        <?php else: ?>
-          <div class="row margin-bottom-40" id="featured-products">
+          <?php endif; ?>
+
+          <?php if ($sectionKey === 'new_arrivals'): ?>
+            <?php $hasRenderedMainSection = true; ?>
+            <div class="row margin-bottom-40" id="new-arrivals">
+              <div class="col-md-12 sale-product">
+                <h2><?php echo fe_h($newArrivalsTitle); ?></h2>
+                <?php if ($newArrivalProducts !== []): ?>
+                  <div class="row product-list">
+                    <?php foreach ($newArrivalProducts as $product): ?>
+                      <?php
+                        $img = trim((string) ($product['image_path'] ?? ''));
+                        if ($img === '') {
+                            $img = 'assets/pages/img/products/model2.jpg';
+                        }
+                        $categoryName = trim((string) ($product['category_name'] ?? 'General'));
+                        if ($categoryName === '') {
+                            $categoryName = 'General';
+                        }
+                        $productId = (int) ($product['id'] ?? 0);
+                      ?>
+                      <div class="col-md-3 col-sm-6 col-xs-12">
+                        <div class="product-item"
+                          data-product-id="<?php echo $productId; ?>"
+                          data-product-price="<?php echo number_format((float) ($product['price'] ?? 0), 2, '.', ''); ?>"
+                          data-stock="<?php echo (int) ($product['stock_qty'] ?? 0); ?>"
+                          data-category="<?php echo fe_h($categoryName); ?>">
+                          <div class="pi-img-wrapper">
+                            <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            <div>
+                              <a href="<?php echo fe_h($img); ?>" class="btn btn-default fancybox-button">Zoom</a>
+                              <a href="shop-item.php?id=<?php echo $productId; ?>" class="btn btn-default js-quick-view">Quick View</a>
+                            </div>
+                          </div>
+                          <h3><a href="shop-item.php?id=<?php echo $productId; ?>"><?php echo fe_h((string) ($product['name'] ?? 'Product')); ?></a></h3>
+                          <div class="pi-price">$<?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
+                          <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo $productId; ?>">Add to cart</button>
+                        </div>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php else: ?>
+                  <div class="shop-filter-empty" style="display:block;">No new arrivals available right now.</div>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endif; ?>
+
+          <?php if ($sectionKey === 'featured'): ?>
+            <?php $hasRenderedMainSection = true; ?>
+            <div class="row margin-bottom-35" id="featured-items">
+              <div class="col-md-12 sale-product">
+                <h2><?php echo fe_h($featuredTitle); ?></h2>
+                <?php if ($featuredProducts !== []): ?>
+                  <div class="row product-list">
+                    <?php foreach ($featuredProducts as $product): ?>
+                      <?php
+                        $img = trim((string) ($product['image_path'] ?? ''));
+                        if ($img === '') {
+                            $img = 'assets/pages/img/products/model3.jpg';
+                        }
+                        $categoryName = trim((string) ($product['category_name'] ?? 'General'));
+                        if ($categoryName === '') {
+                            $categoryName = 'General';
+                        }
+                        $productId = (int) ($product['id'] ?? 0);
+                      ?>
+                      <div class="col-md-3 col-sm-6 col-xs-12">
+                        <div class="product-item"
+                          data-product-id="<?php echo $productId; ?>"
+                          data-product-price="<?php echo number_format((float) ($product['price'] ?? 0), 2, '.', ''); ?>"
+                          data-stock="<?php echo (int) ($product['stock_qty'] ?? 0); ?>"
+                          data-category="<?php echo fe_h($categoryName); ?>">
+                          <div class="pi-img-wrapper">
+                            <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            <div>
+                              <a href="<?php echo fe_h($img); ?>" class="btn btn-default fancybox-button">Zoom</a>
+                              <a href="shop-item.php?id=<?php echo $productId; ?>" class="btn btn-default js-quick-view">Quick View</a>
+                            </div>
+                          </div>
+                          <h3><a href="shop-item.php?id=<?php echo $productId; ?>"><?php echo fe_h((string) ($product['name'] ?? 'Product')); ?></a></h3>
+                          <div class="pi-price">$<?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
+                          <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo $productId; ?>">Add to cart</button>
+                        </div>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php else: ?>
+                  <div class="shop-filter-empty" style="display:block;">No featured products available right now.</div>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endif; ?>
+        <?php endforeach; ?>
+
+        <?php if (!$hasRenderedMainSection): ?>
+          <div class="row margin-bottom-40">
             <div class="col-md-12">
-              <div class="shop-filter-empty" style="display:block;">No products found right now. Please check back soon.</div>
+              <div class="shop-filter-empty" style="display:block;">No homepage sections are enabled. Enable sections from Admin Controls.</div>
             </div>
           </div>
         <?php endif; ?>
-        <!-- BEGIN SALE PRODUCT & NEW ARRIVALS -->
-        <div class="row margin-bottom-40">
-          <!-- BEGIN SALE PRODUCT -->
-          <div class="col-md-12 sale-product">
-            <h2>New Arrivals</h2>
-            <div class="owl-carousel owl-carousel5">
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/model1.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/model1.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                  <div class="sticker sticker-sale"></div>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/model2.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/model2.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress2</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/model6.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/model6.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress2</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                  <div class="product-item">
-                    <div class="pi-img-wrapper">
-                      <img src="assets/pages/img/products/model4.jpg" class="img-responsive" alt="Berry Lace Dress">
-                      <div>
-                        <a href="assets/pages/img/products/model4.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                        <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                      </div>
-                    </div>
-                    <h3><a href="javascript:;">Berry Lace Dress4</a></h3>
-                    <div class="pi-price">$29.00</div>
-                    <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                    <div class="sticker sticker-new"></div>
-                  </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/model5.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/model5.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress5</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/model3.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/model3.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress3</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/model7.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/model7.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress3</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- END SALE PRODUCT -->
-        </div>
-        <!-- END SALE PRODUCT & NEW ARRIVALS -->
-
-        <!-- BEGIN SIDEBAR & CONTENT -->
-        <div class="row margin-bottom-40 ">
-          <!-- BEGIN SIDEBAR -->
-          <div class="sidebar col-md-3 col-sm-4">
-            <ul class="list-group margin-bottom-25 sidebar-menu">
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Ladies</a></li>
-              <li class="list-group-item clearfix dropdown">
-                <a href="shop-product-list.php">
-                  <i class="fa fa-angle-right"></i>
-                  Mens
-                  
-                </a>
-                <ul class="dropdown-menu">
-                  <li class="list-group-item dropdown clearfix">
-                    <a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Shoes </a>
-                      <ul class="dropdown-menu">
-                        <li class="list-group-item dropdown clearfix">
-                          <a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Classic </a>
-                          <ul class="dropdown-menu">
-                            <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Classic 1</a></li>
-                            <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Classic 2</a></li>
-                          </ul>
-                        </li>
-                        <li class="list-group-item dropdown clearfix">
-                          <a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Sport  </a>
-                          <ul class="dropdown-menu">
-                            <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Sport 1</a></li>
-                            <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Sport 2</a></li>
-                          </ul>
-                        </li>
-                      </ul>
-                  </li>
-                  <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Trainers</a></li>
-                  <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Jeans</a></li>
-                  <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Chinos</a></li>
-                  <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> T-Shirts</a></li>
-                </ul>
-              </li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Kids</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Accessories</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Sports</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Brands</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Electronics</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Home & Garden</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Custom Link</a></li>
-            </ul>
-          </div>
-          <!-- END SIDEBAR -->
-          <!-- BEGIN CONTENT -->
-          <div class="col-md-9 col-sm-8">
-            <h2>Three items</h2>
-            <div class="owl-carousel owl-carousel3">
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k1.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k1.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                  <div class="sticker sticker-new"></div>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k2.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k2.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress2</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k3.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k3.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress3</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k4.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k4.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress4</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                  <div class="sticker sticker-sale"></div>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k1.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k1.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress5</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k2.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k2.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress6</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- END CONTENT -->
-        </div>
-        <!-- END SIDEBAR & CONTENT -->
-
-        <!-- BEGIN TWO PRODUCTS & PROMO -->
-        <div class="row margin-bottom-35 ">
-          <!-- BEGIN TWO PRODUCTS -->
-          <div class="col-md-6 two-items-bottom-items">
-            <h2>Two items</h2>
-            <div class="owl-carousel owl-carousel2">
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k4.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k4.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k2.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k2.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k3.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k3.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k1.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k1.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k4.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k4.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-              <div>
-                <div class="product-item">
-                  <div class="pi-img-wrapper">
-                    <img src="assets/pages/img/products/k3.jpg" class="img-responsive" alt="Berry Lace Dress">
-                    <div>
-                      <a href="assets/pages/img/products/k3.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
-                    </div>
-                  </div>
-                  <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
-                  <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- END TWO PRODUCTS -->
-          <!-- BEGIN PROMO -->
-          <div class="col-md-6 shop-index-carousel">
-            <div class="content-slider">
-              <div id="myCarousel" class="carousel slide" data-ride="carousel">
-                <!-- Indicators -->
-                <ol class="carousel-indicators">
-                  <li data-target="#myCarousel" data-slide-to="0" class="active"></li>
-                  <li data-target="#myCarousel" data-slide-to="1"></li>
-                  <li data-target="#myCarousel" data-slide-to="2"></li>
-                </ol>
-                <div class="carousel-inner">
-                  <div class="item active">
-                    <img src="assets/pages/img/index-sliders/slide1.jpg" class="img-responsive" alt="Berry Lace Dress">
-                  </div>
-                  <div class="item">
-                    <img src="assets/pages/img/index-sliders/slide2.jpg" class="img-responsive" alt="Berry Lace Dress">
-                  </div>
-                  <div class="item">
-                    <img src="assets/pages/img/index-sliders/slide3.jpg" class="img-responsive" alt="Berry Lace Dress">
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- END PROMO -->
-        </div>        
-        <!-- END TWO PRODUCTS & PROMO -->
       </div>
     </div>
 

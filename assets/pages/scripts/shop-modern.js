@@ -735,11 +735,16 @@
   }
 
   function enhanceHeroButtons() {
-    var buttons = document.querySelectorAll('.carousel-btn[href="#"], .carousel-btn[data-shop-cta="true"]');
+    var buttons = document.querySelectorAll('.carousel-btn, .carousel-btn[data-shop-cta="true"]');
     Array.prototype.forEach.call(buttons, function (btn) {
       btn.classList.add('shop-cta-btn');
-      btn.setAttribute('href', '#featured-products');
-      btn.textContent = 'Shop Now';
+      var href = (btn.getAttribute('href') || '').trim();
+      if (href === '' || href === '#') {
+        btn.setAttribute('href', '#featured-products');
+      }
+      if ((btn.textContent || '').trim() === '') {
+        btn.textContent = 'Shop Now';
+      }
     });
   }
 
