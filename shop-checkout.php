@@ -1,3 +1,13 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/auth-functions.php';
+auth_start_session();
+if (auth_current_user_id() <= 0) {
+    header('Location: login.php?next=' . rawurlencode('shop-checkout.php'));
+    exit;
+}
+?>
 <!DOCTYPE html>
 <!--
 Template: Metronic Frontend Freebie - Responsive HTML Template Based On Twitter Bootstrap 3.3.4

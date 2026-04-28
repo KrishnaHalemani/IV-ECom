@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../auth-functions.php';
+require_once __DIR__ . '/../cart-functions.php';
 require_once __DIR__ . '/../google_oauth_config.php';
 
 function redirect_with_error(string $message): void
@@ -150,7 +152,7 @@ if ($email === '') {
     redirect_with_error('Google account email is missing.');
 }
 
-$db = get_db_connection();
+$db = auth_db();
 ensure_google_columns($db);
 
 $user = null;
@@ -183,23 +185,24 @@ if ($user) {
     $userId = (int) $user['id'];
     $stmt = $db->prepare(
         'UPDATE users
-         SET full_name = ?, email = ?, google_id = ?, avatar_url = ?, last_login_at = NOW()
+         SET name = ?, full_name = ?, email = ?, google_id = ?, avatar_url = ?, last_login_at = NOW()
          WHERE id = ?'
     );
     if ($stmt) {
-        $stmt->bind_param('ssssi', $fullName, $email, $googleId, $avatarUrl, $userId);
+        $stmt->bind_param('sssssi', $fullName, $fullName, $email, $googleId, $avatarUrl, $userId);
         $stmt->execute();
         $stmt->close();
     }
 } else {
     $status = 'active';
     $phone = '';
+    $passwordHash = null;
     $stmt = $db->prepare(
-        'INSERT INTO users (full_name, email, google_id, phone, avatar_url, status, created_at, last_login_at)
-         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())'
+        'INSERT INTO users (name, full_name, email, password, google_id, phone, avatar_url, status, created_at, last_login_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())'
     );
     if ($stmt) {
-        $stmt->bind_param('ssssss', $fullName, $email, $googleId, $phone, $avatarUrl, $status);
+        $stmt->bind_param('ssssssss', $fullName, $fullName, $email, $passwordHash, $googleId, $phone, $avatarUrl, $status);
         $stmt->execute();
         $userId = (int) $stmt->insert_id;
         $stmt->close();
@@ -220,5 +223,7 @@ $_SESSION['user_avatar'] = $avatarUrl;
 $_SESSION['user_auth_provider'] = 'google';
 unset($_SESSION['google_login_error']);
 
-header('Location: ../shop-account.php');
+cartMergeSessionIntoUserCart($userId);
+
+header('Location: ../account.php');
 exit;

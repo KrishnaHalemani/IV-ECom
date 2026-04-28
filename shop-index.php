@@ -133,34 +133,22 @@ if ($categoriesResult instanceof mysqli_result) {
     $categoriesResult->free();
 }
 
-$products = [];
-$productSql = "SELECT p.id, p.name, p.image_path, p.price, p.stock_qty, p.category_id, p.is_featured, p.is_new, p.display_section, c.name AS category_name
-               FROM products p
-               LEFT JOIN categories c ON c.id = p.category_id
-               WHERE p.is_active = 1";
-if ($selectedCategoryId > 0) {
-    $productSql .= ' AND p.category_id = ?';
-}
-$productSql .= ' ORDER BY p.id DESC LIMIT 60';
-
-$productStmt = $db->prepare($productSql);
-if ($productStmt instanceof mysqli_stmt) {
-    if ($selectedCategoryId > 0) {
-        $productStmt->bind_param('i', $selectedCategoryId);
+$allProducts = [];
+$allProductSql = "SELECT p.id, p.name, p.image_path, p.price, p.stock_qty, p.category_id, p.is_featured, p.is_new, p.display_section, c.name AS category_name
+                  FROM products p
+                  LEFT JOIN categories c ON c.id = p.category_id
+                  WHERE p.is_active = 1
+                  ORDER BY p.id DESC
+                  LIMIT 120";
+$allProductResult = $db->query($allProductSql);
+if ($allProductResult instanceof mysqli_result) {
+    while ($row = $allProductResult->fetch_assoc()) {
+        $allProducts[] = $row;
     }
-    if ($productStmt->execute()) {
-        $result = $productStmt->get_result();
-        if ($result instanceof mysqli_result) {
-            while ($row = $result->fetch_assoc()) {
-                $products[] = $row;
-            }
-            $result->free();
-        }
-    }
-    $productStmt->close();
+    $allProductResult->free();
 }
 
-if ($products === []) {
+if ($allProducts === []) {
     $fallbackSql = 'SELECT id, name, image_path, price, stock_qty, category_id FROM products WHERE is_active = 1 ORDER BY id DESC LIMIT 20';
     $fallbackResult = $db->query($fallbackSql);
     if ($fallbackResult instanceof mysqli_result) {
@@ -169,10 +157,17 @@ if ($products === []) {
             $row['is_featured'] = 0;
             $row['is_new'] = 0;
             $row['category_name'] = 'General';
-            $products[] = $row;
+            $allProducts[] = $row;
         }
         $fallbackResult->free();
     }
+}
+
+$products = $allProducts;
+if ($selectedCategoryId > 0) {
+    $products = array_values(array_filter($allProducts, static function (array $product) use ($selectedCategoryId): bool {
+        return (int) ($product['category_id'] ?? 0) === $selectedCategoryId;
+    }));
 }
 
 $homeProducts = [];
@@ -188,6 +183,18 @@ foreach ($products as $product) {
         continue;
     }
 
+    if ($displaySection !== 'new_arrivals' && $displaySection !== 'featured') {
+        $homeProducts[] = $product;
+    }
+}
+
+foreach ($allProducts as $product) {
+    $displaySection = (string) ($product['display_section'] ?? 'home');
+    $productId = (int) ($product['id'] ?? 0);
+    if ($productId <= 0 || $displaySection === 'none') {
+        continue;
+    }
+
     if ($displaySection === 'new_arrivals') {
         $newArrivalProducts[] = $product;
         $newSeen[$productId] = true;
@@ -197,13 +204,10 @@ foreach ($products as $product) {
     if ($displaySection === 'featured') {
         $featuredProducts[] = $product;
         $featuredSeen[$productId] = true;
-        continue;
     }
-
-    $homeProducts[] = $product;
 }
 
-foreach ($products as $product) {
+foreach ($allProducts as $product) {
     $productId = (int) ($product['id'] ?? 0);
     if ($productId <= 0) {
         continue;

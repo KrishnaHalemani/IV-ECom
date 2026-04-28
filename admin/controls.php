@@ -88,6 +88,95 @@ function handle_hero_image_upload(string $fieldName, ?string $currentPath = null
     return 'uploads/hero/' . $newName;
 }
 
+function build_category_option_rows(array $categories, bool $activeOnly = true): array
+{
+    $rowsById = [];
+    foreach ($categories as $category) {
+        $id = (int) ($category['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        if ($activeOnly && (int) ($category['is_active'] ?? 0) !== 1) {
+            continue;
+        }
+        $rowsById[$id] = $category;
+    }
+
+    $children = [];
+    foreach ($rowsById as $id => $category) {
+        $parentId = (int) ($category['parent_id'] ?? 0);
+        if ($parentId > 0 && isset($rowsById[$parentId])) {
+            $children[$parentId][] = $id;
+        } else {
+            $children[0][] = $id;
+        }
+    }
+
+    $optionRows = [];
+    $visited = [];
+    $walk = static function (int $parentId, int $depth) use (&$walk, &$children, &$rowsById, &$optionRows, &$visited): void {
+        if (!isset($children[$parentId])) {
+            return;
+        }
+
+        usort($children[$parentId], static function (int $a, int $b) use ($rowsById): int {
+            $nameA = strtolower(trim((string) ($rowsById[$a]['name'] ?? '')));
+            $nameB = strtolower(trim((string) ($rowsById[$b]['name'] ?? '')));
+            return strcmp($nameA, $nameB);
+        });
+
+        foreach ($children[$parentId] as $categoryId) {
+            if (isset($visited[$categoryId])) {
+                continue;
+            }
+            $visited[$categoryId] = true;
+            $category = $rowsById[$categoryId];
+            $name = trim((string) ($category['name'] ?? 'Category'));
+            $label = $depth > 0 ? str_repeat('-- ', $depth) . $name : $name;
+            $optionRows[] = [
+                'id' => $categoryId,
+                'label' => $label,
+            ];
+            $walk($categoryId, $depth + 1);
+        }
+    };
+
+    $walk(0, 0);
+
+    foreach ($rowsById as $id => $category) {
+        if (isset($visited[$id])) {
+            continue;
+        }
+        $name = trim((string) ($category['name'] ?? 'Category'));
+        $optionRows[] = ['id' => $id, 'label' => $name];
+    }
+
+    return $optionRows;
+}
+
+function normalize_display_section(string $value): string
+{
+    $displaySection = trim($value);
+    $allowedDisplaySections = ['home', 'new_arrivals', 'featured', 'none'];
+    if (!in_array($displaySection, $allowedDisplaySections, true)) {
+        return 'home';
+    }
+
+    return $displaySection;
+}
+
+function display_section_flags(string $displaySection): array
+{
+    if ($displaySection === 'new_arrivals') {
+        return ['is_featured' => 0, 'is_new' => 1];
+    }
+    if ($displaySection === 'featured') {
+        return ['is_featured' => 1, 'is_new' => 0];
+    }
+
+    return ['is_featured' => 0, 'is_new' => 0];
+}
+
 $section = (string) ($_GET['section'] ?? 'products');
 $allowedSections = ['products', 'categories', 'users', 'orders', 'stock', 'coupons', 'hero', 'homepage_sections'];
 if (!in_array($section, $allowedSections, true)) {
@@ -100,31 +189,57 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     if ($section === 'categories') {
         if ($action === 'create_category') {
             $name = trim((string) ($_POST['name'] ?? ''));
+            $parentId = (int) ($_POST['parent_id'] ?? 0);
             $isActive = isset($_POST['is_active']) ? 1 : 0;
             if ($name === '') {
                 admin_flash_set('Category name is required.', 'error');
             } else {
                 $slug = make_slug($name);
-                $stmt = $db->prepare('INSERT INTO categories (name, slug, is_active) VALUES (?, ?, ?)');
-                if ($stmt) {
-                    $stmt->bind_param('ssi', $name, $slug, $isActive);
-                    $ok = $stmt->execute();
-                    $stmt->close();
-                    admin_flash_set($ok ? 'Category added.' : 'Could not add category.', $ok ? 'success' : 'error');
+                $parent = $parentId > 0 ? $parentId : null;
+                if ($parent === null) {
+                    $stmt = $db->prepare('INSERT INTO categories (name, slug, parent_id, is_active) VALUES (?, ?, NULL, ?)');
+                    if ($stmt) {
+                        $stmt->bind_param('ssi', $name, $slug, $isActive);
+                        $ok = $stmt->execute();
+                        $stmt->close();
+                        admin_flash_set($ok ? 'Category added.' : 'Could not add category.', $ok ? 'success' : 'error');
+                    }
+                } else {
+                    $stmt = $db->prepare('INSERT INTO categories (name, slug, parent_id, is_active) VALUES (?, ?, ?, ?)');
+                    if ($stmt) {
+                        $stmt->bind_param('ssii', $name, $slug, $parent, $isActive);
+                        $ok = $stmt->execute();
+                        $stmt->close();
+                        admin_flash_set($ok ? 'Category added.' : 'Could not add category.', $ok ? 'success' : 'error');
+                    }
                 }
             }
         } elseif ($action === 'update_category') {
             $id = (int) ($_POST['id'] ?? 0);
             $name = trim((string) ($_POST['name'] ?? ''));
+            $parentId = (int) ($_POST['parent_id'] ?? 0);
             $isActive = isset($_POST['is_active']) ? 1 : 0;
             if ($id > 0 && $name !== '') {
                 $slug = make_slug($name);
-                $stmt = $db->prepare('UPDATE categories SET name = ?, slug = ?, is_active = ? WHERE id = ?');
-                if ($stmt) {
-                    $stmt->bind_param('ssii', $name, $slug, $isActive, $id);
-                    $ok = $stmt->execute();
-                    $stmt->close();
-                    admin_flash_set($ok ? 'Category updated.' : 'Could not update category.', $ok ? 'success' : 'error');
+                if ($parentId === $id) {
+                    $parentId = 0;
+                }
+                if ($parentId > 0) {
+                    $stmt = $db->prepare('UPDATE categories SET name = ?, slug = ?, parent_id = ?, is_active = ? WHERE id = ?');
+                    if ($stmt) {
+                        $stmt->bind_param('ssiii', $name, $slug, $parentId, $isActive, $id);
+                        $ok = $stmt->execute();
+                        $stmt->close();
+                        admin_flash_set($ok ? 'Category updated.' : 'Could not update category.', $ok ? 'success' : 'error');
+                    }
+                } else {
+                    $stmt = $db->prepare('UPDATE categories SET name = ?, slug = ?, parent_id = NULL, is_active = ? WHERE id = ?');
+                    if ($stmt) {
+                        $stmt->bind_param('ssii', $name, $slug, $isActive, $id);
+                        $ok = $stmt->execute();
+                        $stmt->close();
+                        admin_flash_set($ok ? 'Category updated.' : 'Could not update category.', $ok ? 'success' : 'error');
+                    }
                 }
             }
         } elseif ($action === 'delete_category') {
@@ -151,13 +266,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $stock = (int) ($_POST['stock_qty'] ?? 0);
             $description = trim((string) ($_POST['description'] ?? ''));
             $isActive = isset($_POST['is_active']) ? 1 : 0;
-            $isFeatured = isset($_POST['is_featured']) ? 1 : 0;
-            $isNew = isset($_POST['is_new']) ? 1 : 0;
-            $displaySection = (string) ($_POST['display_section'] ?? 'home');
-            $allowedDisplaySections = ['home', 'new_arrivals', 'featured', 'none'];
-            if (!in_array($displaySection, $allowedDisplaySections, true)) {
-                $displaySection = 'home';
-            }
+            $displaySection = normalize_display_section((string) ($_POST['display_section'] ?? 'home'));
+            $displayFlags = display_section_flags($displaySection);
+            $isFeatured = (int) $displayFlags['is_featured'];
+            $isNew = (int) $displayFlags['is_new'];
             $imagePath = handle_product_image_upload('image_file', '');
 
             if ($name === '' || $sku === '') {
@@ -184,13 +296,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $stock = (int) ($_POST['stock_qty'] ?? 0);
             $description = trim((string) ($_POST['description'] ?? ''));
             $isActive = isset($_POST['is_active']) ? 1 : 0;
-            $isFeatured = isset($_POST['is_featured']) ? 1 : 0;
-            $isNew = isset($_POST['is_new']) ? 1 : 0;
-            $displaySection = (string) ($_POST['display_section'] ?? 'home');
-            $allowedDisplaySections = ['home', 'new_arrivals', 'featured', 'none'];
-            if (!in_array($displaySection, $allowedDisplaySections, true)) {
-                $displaySection = 'home';
-            }
+            $displaySection = normalize_display_section((string) ($_POST['display_section'] ?? 'home'));
+            $displayFlags = display_section_flags($displaySection);
+            $isFeatured = (int) $displayFlags['is_featured'];
+            $isNew = (int) $displayFlags['is_new'];
             $currentImage = trim((string) ($_POST['current_image_path'] ?? ''));
             $imagePath = handle_product_image_upload('image_file', $currentImage);
 
@@ -385,6 +494,60 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                     admin_flash_set($ok ? 'Hero slide added.' : 'Could not add hero slide.', $ok ? 'success' : 'error');
                 }
             }
+        } elseif ($action === 'create_hero_slide_from_product') {
+            $productId = (int) ($_POST['product_id'] ?? 0);
+            $title = trim((string) ($_POST['title'] ?? ''));
+            $subtitle = trim((string) ($_POST['subtitle'] ?? ''));
+            $sortOrder = (int) ($_POST['sort_order'] ?? 0);
+            $isActive = isset($_POST['is_active']) ? 1 : 0;
+
+            if ($productId <= 0) {
+                admin_flash_set('Please select a product to create hero slide.', 'error');
+            } else {
+                $productStmt = $db->prepare(
+                    'SELECT id, name, image_path
+                     FROM products
+                     WHERE id = ? AND is_active = 1
+                     LIMIT 1'
+                );
+
+                if ($productStmt) {
+                    $productStmt->bind_param('i', $productId);
+                    $productStmt->execute();
+                    $productResult = $productStmt->get_result();
+                    $productRow = $productResult ? $productResult->fetch_assoc() : null;
+                    $productStmt->close();
+
+                    if (!is_array($productRow)) {
+                        admin_flash_set('Selected product is not available or not active.', 'error');
+                    } else {
+                        $productName = trim((string) ($productRow['name'] ?? ''));
+                        $imagePath = trim((string) ($productRow['image_path'] ?? ''));
+
+                        if ($title === '') {
+                            $title = $productName;
+                        }
+
+                        if ($title === '') {
+                            admin_flash_set('Slide title is required.', 'error');
+                        } else {
+                            $buttonText = 'Shop Now';
+                            $buttonLink = 'shop-item.php?id=' . $productId;
+
+                            $insertStmt = $db->prepare(
+                                'INSERT INTO hero_sections (title, subtitle, button_text, button_link, image, sort_order, is_active)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+                            );
+                            if ($insertStmt) {
+                                $insertStmt->bind_param('sssssii', $title, $subtitle, $buttonText, $buttonLink, $imagePath, $sortOrder, $isActive);
+                                $ok = $insertStmt->execute();
+                                $insertStmt->close();
+                                admin_flash_set($ok ? 'Hero slide added from product.' : 'Could not add hero slide from product.', $ok ? 'success' : 'error');
+                            }
+                        }
+                    }
+                }
+            }
         } elseif ($action === 'update_hero_slide') {
             $id = (int) ($_POST['id'] ?? 0);
             $title = trim((string) ($_POST['title'] ?? ''));
@@ -471,7 +634,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 }
 
 $flash = admin_flash_get();
-$categories = $db->query('SELECT id, name, slug, is_active, created_at FROM categories ORDER BY id DESC');
+$categoriesData = [];
+$categoriesResult = $db->query(
+    'SELECT c.id, c.name, c.slug, c.parent_id, c.is_active, c.created_at, p.name AS parent_name
+     FROM categories c
+     LEFT JOIN categories p ON p.id = c.parent_id
+     ORDER BY COALESCE(c.parent_id, 0) ASC, c.name ASC'
+);
+if ($categoriesResult instanceof mysqli_result) {
+    while ($row = $categoriesResult->fetch_assoc()) {
+        $categoriesData[] = $row;
+    }
+    $categoriesResult->free();
+}
+$categoryOptionRows = build_category_option_rows($categoriesData, true);
+
 $products = $db->query(
     'SELECT p.id, p.name, p.sku, p.image_path, p.price, p.stock_qty, p.is_active, p.is_featured, p.is_new, p.display_section, p.description, p.created_at, p.category_id, c.name AS category_name
      FROM products p
@@ -482,6 +659,13 @@ $users = $db->query('SELECT id, full_name, email, phone, status, created_at FROM
 $orders = $db->query('SELECT id, order_number, user_id, customer_name, customer_email, total_amount, status, created_at FROM orders ORDER BY id DESC');
 $coupons = $db->query('SELECT id, code, discount_type, discount_value, start_date, end_date, usage_limit, is_active, created_at FROM coupons ORDER BY id DESC');
 $heroSlides = $db->query('SELECT id, title, subtitle, button_text, button_link, image, sort_order, is_active, created_at FROM hero_sections ORDER BY sort_order ASC, id DESC');
+$heroSourceProducts = $db->query(
+    "SELECT id, name, sku, image_path
+     FROM products
+     WHERE is_active = 1
+       AND (display_section IS NULL OR display_section <> 'none')
+     ORDER BY name ASC, id DESC"
+);
 $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_order, created_at FROM homepage_sections ORDER BY display_order ASC, id ASC');
 ?>
 <!doctype html>
@@ -551,28 +735,48 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
           <input type="hidden" name="action" value="create_category">
           <div class="grid-4">
             <div><input type="text" name="name" placeholder="Category name" required></div>
+            <div>
+              <select name="parent_id">
+                <option value="0">Top-level category</option>
+                <?php foreach ($categoryOptionRows as $categoryOption): ?>
+                  <option value="<?php echo (int) $categoryOption['id']; ?>"><?php echo admin_h((string) $categoryOption['label']); ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
             <div><label><input type="checkbox" name="is_active" checked> Active</label></div>
             <div><button class="btn btn-primary" type="submit">Add Category</button></div>
           </div>
         </form>
         <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+          <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Parent</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
           <tbody>
-            <?php if (!$categories || $categories->num_rows === 0): ?>
-              <tr><td colspan="6">No categories found.</td></tr>
-            <?php else: while ($row = $categories->fetch_assoc()): ?>
+            <?php if ($categoriesData === []): ?>
+              <tr><td colspan="7">No categories found.</td></tr>
+            <?php else: foreach ($categoriesData as $row): ?>
               <tr>
                 <td><?php echo (int) $row['id']; ?></td>
-                <td colspan="4">
+                <td colspan="5">
                   <form method="post" action="controls.php?section=categories">
                     <input type="hidden" name="action" value="update_category">
                     <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
                     <div class="grid-4">
                       <div><input type="text" name="name" value="<?php echo admin_h((string) $row['name']); ?>" required></div>
                       <div><input type="text" value="<?php echo admin_h((string) $row['slug']); ?>" disabled></div>
+                      <div>
+                        <select name="parent_id">
+                          <option value="0">Top-level category</option>
+                          <?php foreach ($categoryOptionRows as $categoryOption): ?>
+                            <?php $optionId = (int) $categoryOption['id']; ?>
+                            <?php if ($optionId === (int) $row['id']) { continue; } ?>
+                            <option value="<?php echo $optionId; ?>" <?php echo (int) ($row['parent_id'] ?? 0) === $optionId ? 'selected' : ''; ?>>
+                              <?php echo admin_h((string) $categoryOption['label']); ?>
+                            </option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
                       <div><label><input type="checkbox" name="is_active" <?php echo (int) $row['is_active'] === 1 ? 'checked' : ''; ?>> Active</label></div>
-                      <div><small><?php echo admin_h((string) $row['created_at']); ?></small></div>
                     </div>
+                    <div class="mt"><small>Parent: <?php echo admin_h((string) ($row['parent_name'] ?? 'Top-level')); ?> | Created: <?php echo admin_h((string) $row['created_at']); ?></small></div>
                     <div class="mt"><button class="btn btn-muted" type="submit">Update</button></div>
                   </form>
                 </td>
@@ -584,7 +788,7 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
                   </form>
                 </td>
               </tr>
-            <?php endwhile; endif; ?>
+            <?php endforeach; endif; ?>
           </tbody>
         </table>
       </div>
@@ -601,17 +805,15 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
             <div>
               <select name="category_id">
                 <option value="0">No category</option>
-                <?php if ($categories): while ($c = $categories->fetch_assoc()): ?>
-                  <option value="<?php echo (int) $c['id']; ?>"><?php echo admin_h((string) $c['name']); ?></option>
-                <?php endwhile; $categories->data_seek(0); endif; ?>
+                <?php foreach ($categoryOptionRows as $categoryOption): ?>
+                  <option value="<?php echo (int) $categoryOption['id']; ?>"><?php echo admin_h((string) $categoryOption['label']); ?></option>
+                <?php endforeach; ?>
               </select>
             </div>
             <div><input type="number" step="0.01" name="price" placeholder="Price" required></div>
             <div><input type="number" name="stock_qty" placeholder="Stock" value="0" required></div>
             <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
             <div><label><input type="checkbox" name="is_active" checked> Active</label></div>
-            <div><label><input type="checkbox" name="is_featured"> Featured</label></div>
-            <div><label><input type="checkbox" name="is_new"> New Arrival</label></div>
             <div>
               <select name="display_section">
                 <option value="home">Home</option>
@@ -643,22 +845,29 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
                       <div>
                         <select name="category_id">
                           <option value="0">No category</option>
-                          <?php if ($categories): $categories->data_seek(0); while ($c = $categories->fetch_assoc()): ?>
-                            <option value="<?php echo (int) $c['id']; ?>" <?php echo (int) $row['category_id'] === (int) $c['id'] ? 'selected' : ''; ?>>
-                              <?php echo admin_h((string) $c['name']); ?>
+                          <?php foreach ($categoryOptionRows as $categoryOption): ?>
+                            <option value="<?php echo (int) $categoryOption['id']; ?>" <?php echo (int) $row['category_id'] === (int) $categoryOption['id'] ? 'selected' : ''; ?>>
+                              <?php echo admin_h((string) $categoryOption['label']); ?>
                             </option>
-                          <?php endwhile; endif; ?>
+                          <?php endforeach; ?>
                         </select>
                       </div>
                       <div><input type="number" step="0.01" name="price" value="<?php echo admin_h((string) $row['price']); ?>" required></div>
                       <div><input type="number" name="stock_qty" value="<?php echo (int) $row['stock_qty']; ?>" required></div>
                       <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
                       <div><label><input type="checkbox" name="is_active" <?php echo (int) $row['is_active'] === 1 ? 'checked' : ''; ?>> Active</label></div>
-                      <div><label><input type="checkbox" name="is_featured" <?php echo (int) ($row['is_featured'] ?? 0) === 1 ? 'checked' : ''; ?>> Featured</label></div>
-                      <div><label><input type="checkbox" name="is_new" <?php echo (int) ($row['is_new'] ?? 0) === 1 ? 'checked' : ''; ?>> New Arrival</label></div>
                       <div>
                         <select name="display_section">
-                          <?php $displaySectionValue = (string) ($row['display_section'] ?? 'home'); ?>
+                          <?php
+                          $displaySectionValue = normalize_display_section((string) ($row['display_section'] ?? 'home'));
+                          if ($displaySectionValue === 'home' || $displaySectionValue === 'none') {
+                              if ((int) ($row['is_new'] ?? 0) === 1) {
+                                  $displaySectionValue = 'new_arrivals';
+                              } elseif ((int) ($row['is_featured'] ?? 0) === 1) {
+                                  $displaySectionValue = 'featured';
+                              }
+                          }
+                          ?>
                           <option value="home" <?php echo $displaySectionValue === 'home' ? 'selected' : ''; ?>>Home</option>
                           <option value="new_arrivals" <?php echo $displaySectionValue === 'new_arrivals' ? 'selected' : ''; ?>>New Arrivals</option>
                           <option value="featured" <?php echo $displaySectionValue === 'featured' ? 'selected' : ''; ?>>Featured</option>
@@ -886,6 +1095,36 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
             <div><label><input type="checkbox" name="is_active" checked> Active</label></div>
           </div>
           <div class="mt"><button class="btn btn-primary" type="submit">Add Hero Slide</button></div>
+        </form>
+        <div class="mt"></div>
+        <form method="post" action="controls.php?section=hero">
+          <input type="hidden" name="action" value="create_hero_slide_from_product">
+          <div class="grid-4">
+            <div>
+              <select name="product_id" required>
+                <option value="">Select displayed product</option>
+                <?php if ($heroSourceProducts instanceof mysqli_result): ?>
+                  <?php while ($heroProduct = $heroSourceProducts->fetch_assoc()): ?>
+                    <?php
+                    $heroProductId = (int) ($heroProduct['id'] ?? 0);
+                    $heroProductName = trim((string) ($heroProduct['name'] ?? 'Product'));
+                    $heroProductSku = trim((string) ($heroProduct['sku'] ?? ''));
+                    ?>
+                    <option value="<?php echo $heroProductId; ?>">
+                      <?php echo admin_h($heroProductName . ($heroProductSku !== '' ? ' (' . $heroProductSku . ')' : '')); ?>
+                    </option>
+                  <?php endwhile; ?>
+                  <?php $heroSourceProducts->free(); ?>
+                <?php endif; ?>
+              </select>
+            </div>
+            <div><input type="text" name="title" placeholder="Hero title (optional, defaults to product name)"></div>
+            <div><input type="text" name="subtitle" placeholder="Hero subtitle"></div>
+            <div><input type="number" name="sort_order" placeholder="Sort order" value="0"></div>
+            <div><label><input type="checkbox" name="is_active" checked> Active</label></div>
+          </div>
+          <div class="mt"><small>Uses selected product image and auto-links button to that product page.</small></div>
+          <div class="mt"><button class="btn btn-primary" type="submit">Add From Product</button></div>
         </form>
 
         <table>

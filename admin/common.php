@@ -48,8 +48,10 @@ function ensure_admin_tables(mysqli $db): void
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(120) NOT NULL,
             slug VARCHAR(140) NOT NULL UNIQUE,
+            parent_id INT UNSIGNED NULL,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_categories_parent (parent_id)
         ) ENGINE=InnoDB",
         "CREATE TABLE IF NOT EXISTS users (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -195,12 +197,111 @@ function ensure_admin_tables(mysqli $db): void
         $userLastLoginCheck->free();
     }
 
-    $seedCategory = $db->query('SELECT id FROM categories LIMIT 1');
-    if ($seedCategory && $seedCategory->num_rows === 0) {
-        $db->query("INSERT INTO categories (name, slug, is_active) VALUES ('General', 'general', 1)");
+    $parentColumnCheck = $db->query("SHOW COLUMNS FROM categories LIKE 'parent_id'");
+    if ($parentColumnCheck instanceof mysqli_result && $parentColumnCheck->num_rows === 0) {
+        $db->query("ALTER TABLE categories ADD COLUMN parent_id INT UNSIGNED NULL AFTER slug");
     }
-    if ($seedCategory instanceof mysqli_result) {
-        $seedCategory->free();
+    if ($parentColumnCheck instanceof mysqli_result) {
+        $parentColumnCheck->free();
+    }
+
+    $parentIndexCheck = $db->query("SHOW INDEX FROM categories WHERE Key_name = 'idx_categories_parent'");
+    if ($parentIndexCheck instanceof mysqli_result && $parentIndexCheck->num_rows === 0) {
+        $db->query("ALTER TABLE categories ADD INDEX idx_categories_parent (parent_id)");
+    }
+    if ($parentIndexCheck instanceof mysqli_result) {
+        $parentIndexCheck->free();
+    }
+
+    $defaultCategories = [
+        ['name' => 'General', 'slug' => 'general', 'parent_slug' => null],
+        ['name' => 'Men', 'slug' => 'men', 'parent_slug' => null],
+        ['name' => 'Women', 'slug' => 'women', 'parent_slug' => null],
+        ['name' => 'Kids', 'slug' => 'kids', 'parent_slug' => null],
+        ['name' => 'Accessories', 'slug' => 'accessories', 'parent_slug' => null],
+        ['name' => 'Sports', 'slug' => 'sports', 'parent_slug' => null],
+        ['name' => 'Electronics', 'slug' => 'electronics', 'parent_slug' => null],
+        ['name' => 'Home & Garden', 'slug' => 'home-garden', 'parent_slug' => null],
+        ['name' => 'Men Clothing', 'slug' => 'men-clothing', 'parent_slug' => 'men'],
+        ['name' => 'Men Shoes', 'slug' => 'men-shoes', 'parent_slug' => 'men'],
+        ['name' => 'Women Clothing', 'slug' => 'women-clothing', 'parent_slug' => 'women'],
+        ['name' => 'Women Shoes', 'slug' => 'women-shoes', 'parent_slug' => 'women'],
+    ];
+
+    $slugToCategory = [];
+    $existingCategories = $db->query('SELECT id, slug, parent_id FROM categories');
+    if ($existingCategories instanceof mysqli_result) {
+        while ($row = $existingCategories->fetch_assoc()) {
+            $slugToCategory[(string) $row['slug']] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'parent_id' => isset($row['parent_id']) ? (int) $row['parent_id'] : null,
+            ];
+        }
+        $existingCategories->free();
+    }
+
+    foreach ($defaultCategories as $category) {
+        $slug = (string) $category['slug'];
+        $name = (string) $category['name'];
+        $parentSlug = $category['parent_slug'];
+        if ($parentSlug !== null) {
+            continue;
+        }
+
+        if (!isset($slugToCategory[$slug])) {
+            $isActive = 1;
+            $stmt = $db->prepare('INSERT INTO categories (name, slug, parent_id, is_active) VALUES (?, ?, NULL, ?)');
+            if ($stmt) {
+                $stmt->bind_param('ssi', $name, $slug, $isActive);
+                $stmt->execute();
+                $newId = (int) $stmt->insert_id;
+                $stmt->close();
+                if ($newId > 0) {
+                    $slugToCategory[$slug] = ['id' => $newId, 'parent_id' => null];
+                }
+            }
+        }
+    }
+
+    foreach ($defaultCategories as $category) {
+        $slug = (string) $category['slug'];
+        $name = (string) $category['name'];
+        $parentSlug = $category['parent_slug'];
+        if ($parentSlug === null) {
+            continue;
+        }
+
+        $parentId = isset($slugToCategory[$parentSlug]) ? (int) $slugToCategory[$parentSlug]['id'] : 0;
+        if ($parentId <= 0) {
+            continue;
+        }
+
+        if (!isset($slugToCategory[$slug])) {
+            $isActive = 1;
+            $stmt = $db->prepare('INSERT INTO categories (name, slug, parent_id, is_active) VALUES (?, ?, ?, ?)');
+            if ($stmt) {
+                $stmt->bind_param('ssii', $name, $slug, $parentId, $isActive);
+                $stmt->execute();
+                $newId = (int) $stmt->insert_id;
+                $stmt->close();
+                if ($newId > 0) {
+                    $slugToCategory[$slug] = ['id' => $newId, 'parent_id' => $parentId];
+                }
+            }
+            continue;
+        }
+
+        $existingParentId = (int) ($slugToCategory[$slug]['parent_id'] ?? 0);
+        if ($existingParentId === 0) {
+            $stmt = $db->prepare('UPDATE categories SET parent_id = ? WHERE id = ?');
+            if ($stmt) {
+                $categoryId = (int) $slugToCategory[$slug]['id'];
+                $stmt->bind_param('ii', $parentId, $categoryId);
+                $stmt->execute();
+                $stmt->close();
+                $slugToCategory[$slug]['parent_id'] = $parentId;
+            }
+        }
     }
 
     $seedHomeSections = $db->query('SELECT id FROM homepage_sections LIMIT 1');

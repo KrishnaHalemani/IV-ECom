@@ -60,6 +60,16 @@ switch ($action) {
         $response = ['success' => true, 'message' => 'Cart cleared.'];
         break;
 
+    case 'checkout':
+        $userId = auth_current_user_id();
+        $response = createOrderFromCart($userId);
+        break;
+
+    case 'auth':
+    case 'auth_summary':
+        $response = ['success' => true, 'message' => 'Auth loaded.'];
+        break;
+
     case 'summary':
     case 'list':
         $response = ['success' => true, 'message' => 'Cart loaded.'];
@@ -70,10 +80,12 @@ switch ($action) {
             'success' => false,
             'message' => 'Invalid cart action.',
             'cart' => getCartSummary(),
+            'auth' => cartGetAuthSummary(),
         ], 400);
 }
 
 $response['cart'] = getCartSummary();
+$response['auth'] = cartGetAuthSummary();
 
 if (!$response['success']) {
     cartRespond($response, 422);
