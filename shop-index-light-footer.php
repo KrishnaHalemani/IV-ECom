@@ -60,6 +60,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
   <link href="assets/corporate/css/style-responsive.css" rel="stylesheet">
   <link href="assets/corporate/css/themes/red.css" rel="stylesheet" id="style-color">
   <link href="assets/corporate/css/custom.css" rel="stylesheet">
+  <link href="assets/pages/css/shop-modern.css" rel="stylesheet">
   <!-- Theme styles END -->
 </head>
 <!-- Head END -->
@@ -1134,6 +1135,7 @@ Nostrud duis molestie at dolore.</p>
     <script src="assets/plugins/bootstrap-touchspin/bootstrap.touchspin.js" type="text/javascript"></script><!-- Quantity -->
 
     <script src="assets/corporate/scripts/layout.js" type="text/javascript"></script>
+    <script src="assets/pages/scripts/shop-modern.js" type="text/javascript"></script>
     <script src="assets/pages/scripts/bs-carousel.js" type="text/javascript"></script>
     <script type="text/javascript">
         jQuery(document).ready(function() {
@@ -1148,3 +1150,4 @@ Nostrud duis molestie at dolore.</p>
 </body>
 <!-- END BODY -->
 </html>
+

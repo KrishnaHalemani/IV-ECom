@@ -94,6 +94,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
   <link href="assets/corporate/css/style-responsive.css" rel="stylesheet">
   <link href="assets/corporate/css/themes/red.css" rel="stylesheet" id="style-color">
   <link href="assets/corporate/css/custom.css" rel="stylesheet">
+  <link href="assets/pages/css/shop-modern.css" rel="stylesheet">
   <!-- Theme styles END -->
 </head>
 <!-- Head END -->
@@ -458,7 +459,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
       </div></div>
     </div>
 
-    <div class="main">
+    <div class="main shop-main-content">
       <div class="container">
         <ul class="breadcrumb">
             <li><a href="shop-index.php">Home</a></li>
@@ -583,26 +584,34 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
               </div>
             </div>
             <?php if ($catalogProducts !== []): ?>
-              <div class="row product-list">
+              <div class="row product-list js-catalog-grid">
                 <?php foreach ($catalogProducts as $product): ?>
                   <?php $img = trim((string) ($product['image_path'] ?? '')) !== '' ? (string) $product['image_path'] : 'assets/pages/img/products/model1.jpg'; ?>
-                  <div class="col-md-4 col-sm-6 col-xs-12">
-                    <div class="product-item">
+                  <?php $categoryName = trim((string) ($product['category_name'] ?? '')) !== '' ? (string) $product['category_name'] : 'General'; ?>
+                  <div class="col-md-3 col-sm-6 col-xs-12">
+                    <div class="product-item"
+                      data-product-id="<?php echo (int) $product['id']; ?>"
+                      data-product-price="<?php echo number_format((float) $product['price'], 2, '.', ''); ?>"
+                      data-stock="<?php echo (int) $product['stock_qty']; ?>"
+                      data-category="<?php echo fe_h($categoryName); ?>">
                       <div class="pi-img-wrapper">
-                        <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) $product['name']); ?>">
+                        <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) $product['name']); ?>" loading="lazy" decoding="async">
                         <div>
                           <a href="<?php echo fe_h($img); ?>" class="btn btn-default fancybox-button">Zoom</a>
-                          <a href="shop-item.php?id=<?php echo (int) $product['id']; ?>" class="btn btn-default">View</a>
+                          <a href="shop-item.php?id=<?php echo (int) $product['id']; ?>" class="btn btn-default js-quick-view">Quick View</a>
                         </div>
                       </div>
                       <h3><a href="shop-item.php?id=<?php echo (int) $product['id']; ?>"><?php echo fe_h((string) $product['name']); ?></a></h3>
                       <div class="pi-price">$<?php echo number_format((float) $product['price'], 2); ?></div>
-                      <p class="text-muted"><?php echo fe_h((string) ($product['category_name'] ?? '')); ?> | Stock: <?php echo (int) $product['stock_qty']; ?></p>
+                      <p class="product-meta"><?php echo fe_h($categoryName); ?> | <?php echo (int) $product['stock_qty'] > 0 ? 'In Stock' : 'Out of Stock'; ?></p>
+                      <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo (int) $product['id']; ?>">Add to cart</button>
                       <a href="shop-item.php?id=<?php echo (int) $product['id']; ?>" class="btn btn-default">Details</a>
                     </div>
                   </div>
                 <?php endforeach; ?>
               </div>
+            <?php else: ?>
+              <div class="shop-filter-empty" style="display:block;">No products found right now. Please check back soon.</div>
             <?php endif; ?>
             <!-- BEGIN PRODUCT LIST -->
             <div class="row product-list">
@@ -613,7 +622,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model1.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/model1.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress Berry Lace Dress</a></h3>
@@ -629,7 +638,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model2.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/model2.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
@@ -645,7 +654,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model6.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/model6.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress 2</a></h3>
@@ -663,7 +672,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model4.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                         <a href="assets/pages/img/products/model4.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                        <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                        <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress Berry Lace Dress</a></h3>
@@ -679,7 +688,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model5.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                         <a href="assets/pages/img/products/model5.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                        <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                        <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
@@ -696,7 +705,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model3.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                         <a href="assets/pages/img/products/model3.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                        <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                        <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
@@ -714,7 +723,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model7.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                         <a href="assets/pages/img/products/model7.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                        <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                        <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
@@ -730,7 +739,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model1.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                         <a href="assets/pages/img/products/model1.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                        <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                        <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
@@ -746,7 +755,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/model2.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                         <a href="assets/pages/img/products/model2.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                        <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                        <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
@@ -1031,6 +1040,7 @@ Nostrud duis molestie at dolore.</p>
     <script src="http://code.jquery.com/ui/1.10.3/jquery-ui.js" type="text/javascript"></script><!-- for slider-range -->
 
     <script src="assets/corporate/scripts/layout.js" type="text/javascript"></script>
+    <script src="assets/pages/scripts/shop-modern.js" type="text/javascript"></script>
     <script type="text/javascript">
         jQuery(document).ready(function() {
             Layout.init();    
@@ -1046,3 +1056,5 @@ Nostrud duis molestie at dolore.</p>
 </body>
 <!-- END BODY -->
 </html>
+
+

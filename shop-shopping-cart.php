@@ -60,6 +60,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
   <link href="assets/corporate/css/style-responsive.css" rel="stylesheet">
   <link href="assets/corporate/css/themes/red.css" rel="stylesheet" id="style-color">
   <link href="assets/corporate/css/custom.css" rel="stylesheet">
+  <link href="assets/pages/css/shop-modern.css" rel="stylesheet">
   <!-- Theme styles END -->
 </head>
 <!-- Head END -->
@@ -417,7 +418,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
     </div>
     <!-- Header END -->
 
-    <div class="main">
+    <div class="main shop-main-content">
       <div class="container">
         <!-- BEGIN SIDEBAR & CONTENT -->
         <div class="row margin-bottom-40">
@@ -510,8 +511,8 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   </ul>
                 </div>
               </div>
-              <button class="btn btn-default" type="submit">Continue shopping <i class="fa fa-shopping-cart"></i></button>
-              <button class="btn btn-primary" type="submit">Checkout <i class="fa fa-check"></i></button>
+              <a class="btn btn-default" href="shop-index.php">Continue shopping <i class="fa fa-shopping-cart"></i></a>
+              <a class="btn btn-primary" href="shop-checkout.php">Checkout <i class="fa fa-check"></i></a>
             </div>
           </div>
           <!-- END CONTENT -->
@@ -845,6 +846,7 @@ Nostrud duis molestie at dolore.</p>
     <script src="http://code.jquery.com/ui/1.10.3/jquery-ui.js" type="text/javascript"></script><!-- for slider-range -->
 
     <script src="assets/corporate/scripts/layout.js" type="text/javascript"></script>
+    <script src="assets/pages/scripts/shop-modern.js" type="text/javascript"></script>
     <script type="text/javascript">
         jQuery(document).ready(function() {
             Layout.init();    
@@ -860,3 +862,5 @@ Nostrud duis molestie at dolore.</p>
 </body>
 <!-- END BODY -->
 </html>
+
+

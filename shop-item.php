@@ -51,6 +51,28 @@ $productPrice = $selectedProduct ? (float) $selectedProduct['price'] : 47.00;
 $productStock = $selectedProduct ? (int) $selectedProduct['stock_qty'] : 10;
 $productDesc = $selectedProduct ? trim((string) $selectedProduct['description']) : '';
 $productImg = ($selectedProduct && trim((string) $selectedProduct['image_path']) !== '') ? (string) $selectedProduct['image_path'] : 'assets/pages/img/products/model7.jpg';
+$selectedProductId = (int) ($selectedProduct['id'] ?? 0);
+$relatedProducts = [];
+$relatedQuery = "SELECT id, name, image_path, price, stock_qty FROM products WHERE is_active = 1";
+if ($selectedProductId > 0) {
+    $relatedQuery .= " AND id <> " . $selectedProductId;
+}
+$relatedQuery .= " ORDER BY id DESC LIMIT 8";
+$relatedResult = $db->query($relatedQuery);
+if ($relatedResult === false) {
+    $relatedResult = $db->query(
+        "SELECT id, name, '' AS image_path, price, stock_qty
+         FROM products
+         WHERE is_active = 1
+         ORDER BY id DESC LIMIT 8"
+    );
+}
+if ($relatedResult instanceof mysqli_result) {
+    while ($relatedRow = $relatedResult->fetch_assoc()) {
+        $relatedProducts[] = $relatedRow;
+    }
+    $relatedResult->free();
+}
 ?>
 <!DOCTYPE html>
 <!--
@@ -114,6 +136,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
   <link href="assets/corporate/css/style-responsive.css" rel="stylesheet">
   <link href="assets/corporate/css/themes/red.css" rel="stylesheet" id="style-color">
   <link href="assets/corporate/css/custom.css" rel="stylesheet">
+  <link href="assets/pages/css/shop-modern.css" rel="stylesheet">
   <!-- Theme styles END -->
 </head>
 <!-- Head END -->
@@ -471,7 +494,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
     </div>
     <!-- Header END -->
     
-    <div class="main">
+    <div class="main shop-main-content">
       <div class="container">
         <ul class="breadcrumb">
             <li><a href="shop-index.php">Home</a></li>
@@ -552,12 +575,13 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
               <div class="row">
                 <div class="col-md-6 col-sm-6">
                   <div class="product-main-image">
-                    <img src="<?php echo fe_h($productImg); ?>" alt="<?php echo fe_h($productName); ?>" class="img-responsive" data-BigImgsrc="<?php echo fe_h($productImg); ?>">
+                    <img src="<?php echo fe_h($productImg); ?>" alt="<?php echo fe_h($productName); ?>" class="img-responsive" data-BigImgsrc="<?php echo fe_h($productImg); ?>" loading="lazy" decoding="async">
                   </div>
                   <div class="product-other-images">
-                    <a href="assets/pages/img/products/model3.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model3.jpg"></a>
-                    <a href="assets/pages/img/products/model4.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model4.jpg"></a>
-                    <a href="assets/pages/img/products/model5.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model5.jpg"></a>
+                    <a href="<?php echo fe_h($productImg); ?>" class="fancybox-button active" rel="photos-lib" data-main-image="true"><img alt="<?php echo fe_h($productName); ?>" src="<?php echo fe_h($productImg); ?>" loading="lazy" decoding="async"></a>
+                    <a href="assets/pages/img/products/model3.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model3.jpg" loading="lazy" decoding="async"></a>
+                    <a href="assets/pages/img/products/model4.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model4.jpg" loading="lazy" decoding="async"></a>
+                    <a href="assets/pages/img/products/model5.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model5.jpg" loading="lazy" decoding="async"></a>
                   </div>
                 </div>
                 <div class="col-md-6 col-sm-6">
@@ -596,7 +620,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <div class="product-quantity">
                         <input id="product-quantity" type="text" value="1" readonly class="form-control input-sm" name="product-quantity">
                     </div>
-                    <button class="btn btn-primary" type="submit">Add to cart</button>
+                    <button class="btn btn-primary" type="submit" data-product-id="<?php echo $selectedProductId; ?>">Add to cart</button>
                   </div>
                   <div class="review">
                     <input type="range" value="4" step="0.25" id="backing4" name="backing4">
@@ -711,6 +735,42 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
         </div>
         <!-- END SIDEBAR & CONTENT -->
 
+        <?php if ($relatedProducts !== []): ?>
+          <div class="row margin-bottom-40">
+            <div class="col-md-12 col-sm-12">
+              <h2>Related products</h2>
+              <div class="row product-list">
+                <?php foreach (array_slice($relatedProducts, 0, 4) as $related): ?>
+                  <?php
+                  $relatedImg = trim((string) ($related['image_path'] ?? '')) !== '' ? (string) $related['image_path'] : 'assets/pages/img/products/model1.jpg';
+                  $relatedName = (string) ($related['name'] ?? 'Product');
+                  ?>
+                  <div class="col-md-3 col-sm-6 col-xs-12">
+                    <div class="product-item"
+                      data-product-id="<?php echo (int) $related['id']; ?>"
+                      data-product-price="<?php echo number_format((float) $related['price'], 2, '.', ''); ?>"
+                      data-stock="<?php echo (int) ($related['stock_qty'] ?? 0); ?>"
+                      data-category="Related">
+                      <div class="pi-img-wrapper">
+                        <img src="<?php echo fe_h($relatedImg); ?>" class="img-responsive" alt="<?php echo fe_h($relatedName); ?>" loading="lazy" decoding="async">
+                        <div>
+                          <a href="<?php echo fe_h($relatedImg); ?>" class="btn btn-default fancybox-button">Zoom</a>
+                          <a href="shop-item.php?id=<?php echo (int) $related['id']; ?>" class="btn btn-default js-quick-view">Quick View</a>
+                        </div>
+                      </div>
+                      <h3><a href="shop-item.php?id=<?php echo (int) $related['id']; ?>"><?php echo fe_h($relatedName); ?></a></h3>
+                      <div class="pi-price">$<?php echo number_format((float) $related['price'], 2); ?></div>
+                      <p class="product-meta">Related | <?php echo (int) ($related['stock_qty'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?></p>
+                      <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo (int) $related['id']; ?>">Add to cart</button>
+                      <a href="shop-item.php?id=<?php echo (int) $related['id']; ?>" class="btn btn-default">Details</a>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          </div>
+        <?php endif; ?>
+
         <!-- BEGIN SIMILAR PRODUCTS -->
         <div class="row margin-bottom-40">
           <div class="col-md-12 col-sm-12">
@@ -722,7 +782,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/k1.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/k1.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
@@ -737,7 +797,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/k2.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/k2.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress2</a></h3>
@@ -751,7 +811,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/k3.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/k3.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress3</a></h3>
@@ -765,7 +825,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/k4.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/k4.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress4</a></h3>
@@ -780,7 +840,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/k1.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/k1.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress5</a></h3>
@@ -794,7 +854,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="assets/pages/img/products/k2.jpg" class="img-responsive" alt="Berry Lace Dress">
                     <div>
                       <a href="assets/pages/img/products/k2.jpg" class="btn btn-default fancybox-button">Zoom</a>
-                      <a href="#product-pop-up" class="btn btn-default fancybox-fast-view">View</a>
+                      <a href="#product-pop-up" class="btn btn-default js-quick-view">View</a>
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress6</a></h3>
@@ -1058,6 +1118,7 @@ Nostrud duis molestie at dolore.</p>
     <script src="assets/plugins/rateit/src/jquery.rateit.js" type="text/javascript"></script>
 
     <script src="assets/corporate/scripts/layout.js" type="text/javascript"></script>
+    <script src="assets/pages/scripts/shop-modern.js" type="text/javascript"></script>
     <script type="text/javascript">
         jQuery(document).ready(function() {
             Layout.init();    
@@ -1072,3 +1133,5 @@ Nostrud duis molestie at dolore.</p>
 </body>
 <!-- END BODY -->
 </html>
+
+
