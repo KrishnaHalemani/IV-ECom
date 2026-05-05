@@ -468,8 +468,8 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                           </td>
                           <td class="checkout-model">RES.193</td>
                           <td class="checkout-quantity">1</td>
-                          <td class="checkout-price"><strong><span>$</span>47.00</strong></td>
-                          <td class="checkout-total"><strong><span>$</span>47.00</strong></td>
+                          <td class="checkout-price"><strong><span>INR </span>47.00</strong></td>
+                          <td class="checkout-total"><strong><span>INR </span>47.00</strong></td>
                         </tr>
                         <tr>
                           <td class="checkout-image">
@@ -482,8 +482,8 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                           </td>
                           <td class="checkout-model">RES.193</td>
                           <td class="checkout-quantity">1</td>
-                          <td class="checkout-price"><strong><span>$</span>47.00</strong></td>
-                          <td class="checkout-total"><strong><span>$</span>47.00</strong></td>
+                          <td class="checkout-price"><strong><span>INR </span>47.00</strong></td>
+                          <td class="checkout-total"><strong><span>INR </span>47.00</strong></td>
                         </tr>
                       </table>
                       </div>
@@ -491,23 +491,23 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                         <ul>
                           <li>
                             <em>Sub total</em>
-                            <strong class="price"><span>$</span>47.00</strong>
+                            <strong class="price"><span>INR </span>47.00</strong>
                           </li>
                           <li>
                             <em>Shipping cost</em>
-                            <strong class="price"><span>$</span>3.00</strong>
+                            <strong class="price"><span>INR </span>3.00</strong>
                           </li>
                           <li>
                             <em>Eco Tax (-2.00)</em>
-                            <strong class="price"><span>$</span>3.00</strong>
+                            <strong class="price"><span>INR </span>3.00</strong>
                           </li>
                           <li>
                             <em>VAT (17.5%)</em>
-                            <strong class="price"><span>$</span>3.00</strong>
+                            <strong class="price"><span>INR </span>3.00</strong>
                           </li>
                           <li class="checkout-total-price">
                             <em>Total</em>
-                            <strong class="price"><span>$</span>56.00</strong>
+                            <strong class="price"><span>INR </span>56.00</strong>
                           </li>
                         </ul>
                       </div>

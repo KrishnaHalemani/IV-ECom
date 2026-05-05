@@ -45,7 +45,7 @@ $pagesMenuLabel = htmlspecialchars(site_content_value($siteContentHeader, 'nav_p
     <div class="top-cart-block">
       <div class="top-cart-info">
         <a href="javascript:void(0);" class="top-cart-info-count">0 items</a>
-        <a href="javascript:void(0);" class="top-cart-info-value">$0.00</a>
+        <a href="javascript:void(0);" class="top-cart-info-value">INR 0.00</a>
       </div>
       <i class="fa fa-shopping-cart"></i>
       <div class="top-cart-content-wrapper">

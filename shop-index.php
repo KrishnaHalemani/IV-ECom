@@ -424,7 +424,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                             </div>
                           </div>
                           <h3><a href="shop-item.php?id=<?php echo $productId; ?>"><?php echo fe_h((string) ($product['name'] ?? 'Product')); ?></a></h3>
-                          <div class="pi-price">$<?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
+                          <div class="pi-price">INR <?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
                           <p class="product-meta"><?php echo fe_h($categoryName); ?> | <?php echo (int) ($product['stock_qty'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?></p>
                           <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo $productId; ?>">Add to cart</button>
                           <a href="shop-item.php?id=<?php echo $productId; ?>" class="btn btn-default">Details</a>
@@ -472,7 +472,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                             </div>
                           </div>
                           <h3><a href="shop-item.php?id=<?php echo $productId; ?>"><?php echo fe_h((string) ($product['name'] ?? 'Product')); ?></a></h3>
-                          <div class="pi-price">$<?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
+                          <div class="pi-price">INR <?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
                           <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo $productId; ?>">Add to cart</button>
                         </div>
                       </div>
@@ -518,7 +518,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                             </div>
                           </div>
                           <h3><a href="shop-item.php?id=<?php echo $productId; ?>"><?php echo fe_h((string) ($product['name'] ?? 'Product')); ?></a></h3>
-                          <div class="pi-price">$<?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
+                          <div class="pi-price">INR <?php echo number_format((float) ($product['price'] ?? 0), 2); ?></div>
                           <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo $productId; ?>">Add to cart</button>
                         </div>
                       </div>
@@ -563,8 +563,6 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   <h2>Cool green dress with red bell</h2>
                   <div class="price-availability-block clearfix">
                     <div class="price">
-                      <strong><span>$</span>47.00</strong>
-                      <em>$<span>62.00</span></em>
                       <strong><span>INR </span>47.00</strong>
                       <em>INR <span>62.00</span></em>
                     </div>

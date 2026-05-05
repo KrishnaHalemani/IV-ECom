@@ -185,7 +185,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                  <div class="pi-price">$29.00</div>
+                  <div class="pi-price">INR 29.00</div>
                   <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
                   <div class="sticker sticker-new"></div>
                 </div>
@@ -200,7 +200,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress2</a></h3>
-                  <div class="pi-price">$29.00</div>
+                  <div class="pi-price">INR 29.00</div>
                   <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
                 </div>
               </div>
@@ -214,7 +214,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress3</a></h3>
-                  <div class="pi-price">$29.00</div>
+                  <div class="pi-price">INR 29.00</div>
                   <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
                 </div>
               </div>
@@ -228,7 +228,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress4</a></h3>
-                  <div class="pi-price">$29.00</div>
+                  <div class="pi-price">INR 29.00</div>
                   <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
                   <div class="sticker sticker-sale"></div>
                 </div>
@@ -243,7 +243,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress5</a></h3>
-                  <div class="pi-price">$29.00</div>
+                  <div class="pi-price">INR 29.00</div>
                   <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
                 </div>
               </div>
@@ -257,7 +257,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     </div>
                   </div>
                   <h3><a href="shop-item.php">Berry Lace Dress6</a></h3>
-                  <div class="pi-price">$29.00</div>
+                  <div class="pi-price">INR 29.00</div>
                   <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
                 </div>
               </div>

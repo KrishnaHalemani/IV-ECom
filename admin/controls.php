@@ -812,31 +812,32 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin Controls</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; }
+    body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; font-size: 16px; line-height: 1.45; }
     .topbar { background: #1f2d3d; color: #fff; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
     .topbar a { color: #fff; text-decoration: none; margin-left: 8px; background: #c0392b; padding: 8px 12px; border-radius: 4px; display: inline-block; }
     .topbar .alt { background: #34495e; }
     .wrap { padding: 18px; }
     .tabs a { text-decoration: none; color: #333; background: #e9edf1; padding: 8px 12px; margin-right: 6px; border-radius: 4px; display: inline-block; }
     .tabs a.active { background: #1f2d3d; color: #fff; }
-    .panel { margin-top: 14px; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 14px; }
+    .panel { margin-top: 16px; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 20px; }
     .flash { margin-top: 10px; padding: 10px; border-radius: 4px; border: 1px solid #ddd; }
     .flash.success { background: #e8f8ef; color: #0b6b3a; border-color: #bce6cd; }
     .flash.error { background: #ffecec; color: #8a1f1f; border-color: #f5bdbd; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
     th { background: #f0f2f5; }
-    input, select, textarea { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #bbb; border-radius: 4px; }
+    input, select, textarea { width: 100%; padding: 9px 10px; box-sizing: border-box; border: 1px solid #bbb; border-radius: 4px; font-size: 17px; }
+    label { display: inline-block; margin-bottom: 7px; font-size: 18px; line-height: 1.3; }
     textarea { min-height: 64px; }
     form.inline { display: inline; }
-    .btn { border: 0; border-radius: 4px; padding: 7px 10px; cursor: pointer; }
+    .btn { border: 0; border-radius: 4px; padding: 9px 14px; cursor: pointer; font-size: 16px; }
     .btn-primary { background: #1f78d1; color: #fff; }
     .btn-danger { background: #c0392b; color: #fff; }
     .btn-muted { background: #666; color: #fff; }
-    .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-    .mt { margin-top: 10px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .mt { margin-top: 16px; }
     details.advanced summary { cursor: pointer; font-weight: 600; }
     @media (max-width: 900px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } }
   </style>
@@ -1423,16 +1424,22 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
         <p>Edit homepage headings, counts, layout and header labels using simple fields.</p>
         <form method="post" action="controls.php?section=content_labels">
           <input type="hidden" name="action" value="save_content_labels_simple">
-          <div class="grid-2">
+          <div class="grid-3">
             <div><label>Home Section Heading</label><input type="text" name="home_products_heading" value="<?php echo admin_h($homeSectionLabel); ?>"></div>
             <div><label>Home Items Count</label><input type="number" min="1" max="48" name="home_products_limit" value="<?php echo admin_h($homeProductsLimitLabel); ?>"></div>
             <div><label>Home Columns (1-4)</label><input type="number" min="1" max="4" name="home_products_columns" value="<?php echo admin_h($homeProductsColumnsLabel); ?>"></div>
+          </div>
+          <div class="grid-3 mt">
             <div><label>New Arrivals Heading</label><input type="text" name="new_arrivals_heading" value="<?php echo admin_h($newArrivalsSectionLabel); ?>"></div>
             <div><label>New Arrivals Items Count</label><input type="number" min="1" max="48" name="new_arrivals_limit" value="<?php echo admin_h($newArrivalsLimitLabel); ?>"></div>
             <div><label>New Arrivals Columns (1-4)</label><input type="number" min="1" max="4" name="new_arrivals_columns" value="<?php echo admin_h($newArrivalsColumnsLabel); ?>"></div>
+          </div>
+          <div class="grid-3 mt">
             <div><label>Featured Heading</label><input type="text" name="featured_heading" value="<?php echo admin_h($featuredSectionLabel); ?>"></div>
             <div><label>Featured Items Count</label><input type="number" min="1" max="48" name="featured_limit" value="<?php echo admin_h($featuredLimitLabel); ?>"></div>
             <div><label>Featured Columns (1-4)</label><input type="number" min="1" max="4" name="featured_columns" value="<?php echo admin_h($featuredColumnsLabel); ?>"></div>
+          </div>
+          <div class="grid-2 mt">
             <div><label>Top Menu Label</label><input type="text" name="nav_pages_label" value="<?php echo admin_h($navPagesLabel); ?>"></div>
             <div><label>Sidebar 'All Categories' Label</label><input type="text" name="sidebar_all_categories_label" value="<?php echo admin_h($sidebarAllCategoriesLabel); ?>"></div>
             <div><label>Sidebar Filter Heading</label><input type="text" name="sidebar_filter_title" value="<?php echo admin_h($sidebarFilterTitleLabel); ?>"></div>

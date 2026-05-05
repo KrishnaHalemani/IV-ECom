@@ -220,17 +220,17 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
               <div class="item">
                 <a href="shop-item.php"><img src="assets/pages/img/products/k1.jpg" alt="Some Shoes in Animal with Cut Out"></a>
                 <h3><a href="shop-item.php">Some Shoes in Animal with Cut Out</a></h3>
-                <div class="price">$31.00</div>
+                <div class="price">INR 31.00</div>
               </div>
               <div class="item">
                 <a href="shop-item.php"><img src="assets/pages/img/products/k4.jpg" alt="Some Shoes in Animal with Cut Out"></a>
                 <h3><a href="shop-item.php">Some Shoes in Animal with Cut Out</a></h3>
-                <div class="price">$23.00</div>
+                <div class="price">INR 23.00</div>
               </div>
               <div class="item">
                 <a href="shop-item.php"><img src="assets/pages/img/products/k3.jpg" alt="Some Shoes in Animal with Cut Out"></a>
                 <h3><a href="shop-item.php">Some Shoes in Animal with Cut Out</a></h3>
-                <div class="price">$86.00</div>
+                <div class="price">INR 86.00</div>
               </div>
             </div>
           </div>
