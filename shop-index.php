@@ -324,6 +324,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                             <a href="javascript:void(0);">€</a>
                             <a href="javascript:void(0);">£</a>
                             <a href="javascript:void(0);" class="current">$</a>
+                            <a href="javascript:void(0);" class="current">INR</a>
                         </li>
                         <!-- END CURRENCIES -->
                         <!-- BEGIN LANGS -->
@@ -357,7 +358,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
     <!-- BEGIN HEADER -->
     <div class="header">
       <div class="container">
-        <a class="site-logo" href="shop-index.php"><img src="assets/corporate/img/logos/logo-shop-red.png" alt="Metronic Shop UI"></a>
+        <a class="site-logo" href="shop-index.php"><img src="assets/corporate/img/logos/BattleRockLogo.jpeg" alt="Metronic Shop UI"></a>
 
         <a href="javascript:void(0);" class="mobi-toggler"><i class="fa fa-bars"></i></a>
 
@@ -366,6 +367,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
           <div class="top-cart-info">
             <a href="javascript:void(0);" class="top-cart-info-count">3 items</a>
             <a href="javascript:void(0);" class="top-cart-info-value">$1260</a>
+            <a href="javascript:void(0);" class="top-cart-info-value">INR 1260</a>
           </div>
           <i class="fa fa-shopping-cart"></i>
                         
@@ -1081,6 +1083,8 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <div class="price">
                       <strong><span>$</span>47.00</strong>
                       <em>$<span>62.00</span></em>
+                      <strong><span>INR </span>47.00</strong>
+                      <em>INR <span>62.00</span></em>
                     </div>
                     <div class="availability">
                       Availability: <strong>In Stock</strong>

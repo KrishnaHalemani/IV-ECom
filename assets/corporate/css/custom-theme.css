@@ -1,0 +1,849 @@
+/* Custom Theme Styles for Battle Rock E-commerce */
+
+/* --- 1. CSS Variables for Colors and Fonts --- */
+:root {
+    --color-primary-dark: #1a1a1a;
+    --color-secondary-dark: #2c2c2c;
+    --color-accent: #ff4500; /* OrangeRed */
+    --color-text-light: #ffffff;
+    --color-text-muted: #cccccc;
+    --color-border-light: #444444;
+    --color-background-light: #f5f7fb;
+
+    --font-heading: 'Montserrat', sans-serif;
+    --font-body: 'Open Sans', sans-serif;
+
+    --spacing-xs: 8px;
+    --spacing-sm: 12px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+}
+
+/* --- 2. Global Typography and Base Styles --- */
+body {
+    font-family: var(--font-body);
+    color: var(--color-text-light);
+    background-color: var(--color-primary-dark);
+    line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    color: var(--color-text-light);
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+h1 { font-size: 2.5em; }
+h2 { font-size: 2em; }
+h3 { font-size: 1.75em; }
+
+p {
+    margin-bottom: var(--spacing-md);
+}
+
+a {
+    color: var(--color-accent);
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+a:hover {
+    color: var(--color-text-light);
+}
+
+/* Buttons */
+.btn {
+    border-radius: 5px;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-text-light);
+}
+
+.btn-primary:hover, .btn-primary:focus {
+    background-color: darken(var(--color-accent), 10%);
+    border-color: darken(var(--color-accent), 10%);
+    color: var(--color-text-light);
+}
+
+.btn-default {
+    background-color: var(--color-secondary-dark);
+    border-color: var(--color-border-light);
+    color: var(--color-text-light);
+}
+
+.btn-default:hover, .btn-default:focus {
+    background-color: lighten(var(--color-secondary-dark), 10%);
+    border-color: lighten(var(--color-border-light), 10%);
+    color: var(--color-text-light);
+}
+
+/* --- 3. Header and Navigation --- */
+.pre-header {
+    background-color: var(--color-secondary-dark);
+    color: var(--color-text-muted);
+    padding: var(--spacing-xs) 0;
+    font-size: 0.9em;
+}
+
+.pre-header a {
+    color: var(--color-text-muted);
+}
+
+.pre-header a:hover {
+    color: var(--color-accent);
+}
+
+.header {
+    background-color: var(--color-primary-dark);
+    padding: var(--spacing-md) 0;
+    border-bottom: 1px solid var(--color-border-light);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.header .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.site-logo img {
+    height: 60px; /* Adjust as needed */
+    width: auto;
+    transition: all 0.3s ease;
+}
+
+.site-logo img:hover {
+    opacity: 0.8;
+}
+
+.header-navigation ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+}
+
+.header-navigation ul li {
+    margin-left: var(--spacing-lg);
+    position: relative;
+}
+
+.header-navigation ul li a {
+    color: var(--color-text-light);
+    font-weight: 600;
+    padding: var(--spacing-xs) 0;
+    display: block;
+    transition: color 0.3s ease;
+}
+
+.header-navigation ul li a:hover,
+.header-navigation ul li.active > a {
+    color: var(--color-accent);
+}
+
+.header-navigation .dropdown-menu {
+    background-color: var(--color-secondary-dark);
+    border: 1px solid var(--color-border-light);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.header-navigation .dropdown-menu li a {
+    padding: var(--spacing-xs) var(--spacing-md);
+    color: var(--color-text-light);
+}
+
+.header-navigation .dropdown-menu li a:hover {
+    background-color: lighten(var(--color-secondary-dark), 10%);
+    color: var(--color-accent);
+}
+
+.header-right-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.top-cart-block {
+    position: relative;
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.top-cart-block:hover {
+    background-color: var(--color-secondary-dark);
+}
+
+.top-cart-block .fa-shopping-cart {
+    font-size: 1.5em;
+    color: var(--color-text-light);
+}
+
+.top-cart-info-count, .top-cart-info-value {
+    display: none; /* Hide default text, use badge for count */
+}
+
+.top-cart-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: var(--color-accent);
+    color: var(--color-text-light);
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 0.75em;
+    font-weight: bold;
+}
+
+.top-cart-content {
+    background-color: var(--color-secondary-dark);
+    border: 1px solid var(--color-border-light);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.menu-search .search-box {
+    background-color: var(--color-secondary-dark);
+    border: 1px solid var(--color-border-light);
+    border-radius: 5px;
+}
+
+.menu-search .form-control {
+    background-color: var(--color-primary-dark);
+    border: 1px solid var(--color-border-light);
+    color: var(--color-text-light);
+}
+
+.menu-search .form-control::placeholder {
+    color: var(--color-text-muted);
+}
+
+.menu-search .btn-primary {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+/* --- 4. Hero Section --- */
+.carousel-item-admin {
+    position: relative;
+    min-height: 400px; /* Ensure a minimum height for hero slides */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.carousel-item-admin .carousel-position-four {
+    position: relative;
+    z-index: 2; /* Ensure text is above overlay */
+    padding: var(--spacing-xl);
+    max-width: 800px;
+}
+
+.battle-rock-hero-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent dark overlay */
+    z-index: 1;
+}
+
+.battle-rock-hero-badge {
+    background-color: var(--color-accent);
+    color: var(--color-text-light);
+    padding: 5px 15px;
+    border-radius: 20px;
+    display: inline-block;
+    margin-bottom: var(--spacing-md);
+    font-size: 0.9em;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.battle-rock-hero-title {
+    font-size: 3.5em;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: var(--spacing-md);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.battle-rock-hero-tagline {
+    font-size: 1.5em;
+    color: var(--color-text-muted);
+    margin-bottom: var(--spacing-lg);
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+.carousel-btn {
+    font-size: 1.2em;
+    padding: var(--spacing-md) var(--spacing-xl);
+    border-radius: 30px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* --- 5. Product Section --- */
+.product-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.product-item {
+    background-color: var(--color-secondary-dark);
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    overflow: hidden;
+    text-align: center;
+    padding: var(--spacing-md);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.product-item:hover {
+    box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+    transform: translateY(-5px);
+}
+
+.product-item .pi-img-wrapper {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: var(--spacing-md);
+    border-radius: 4px;
+}
+
+.product-item .product-card-image {
+    width: 100%;
+    height: 200px; /* Fixed height for consistency */
+    object-fit: cover; /* Cover the area without distortion */
+    transition: transform 0.3s ease;
+}
+
+.product-item:hover .product-card-image {
+    transform: scale(1.05);
+}
+
+.product-item .pi-img-wrapper div {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.product-item:hover .pi-img-wrapper div {
+    opacity: 1;
+}
+
+.product-item .pi-img-wrapper div .btn {
+    margin: 0 var(--spacing-xs);
+}
+
+.product-item h3 {
+    font-size: 1.2em;
+    margin-top: 0;
+    margin-bottom: var(--spacing-xs);
+    height: 3em; /* Ensure consistent height for titles */
+    overflow: hidden;
+}
+
+.product-item h3 a {
+    color: var(--color-text-light);
+}
+
+.product-item h3 a:hover {
+    color: var(--color-accent);
+}
+
+.product-item .product-category {
+    font-size: 0.85em;
+    color: var(--color-text-muted);
+    margin-bottom: var(--spacing-sm);
+}
+
+.product-item .pi-price {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: var(--color-accent);
+    margin-bottom: var(--spacing-md);
+}
+
+.product-item .product-actions {
+    display: flex;
+    justify-content: space-around;
+    gap: var(--spacing-xs);
+}
+
+/* --- 6. Sidebar Categories --- */
+.sidebar {
+    background-color: var(--color-secondary-dark);
+    padding: var(--spacing-md);
+    border-radius: 8px;
+}
+
+.sidebar h2 {
+    font-size: 1.5em;
+    margin-top: 0;
+    margin-bottom: var(--spacing-md);
+    color: var(--color-text-light);
+}
+
+.sidebar-menu .list-group-item {
+    background-color: transparent;
+    border: none;
+    padding: var(--spacing-xs) 0;
+}
+
+.sidebar-menu .list-group-item a {
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-menu .list-group-item a:hover,
+.sidebar-menu .list-group-item.active a {
+    color: var(--color-accent);
+}
+
+.sidebar-menu .list-group-item a .fa {
+    margin-right: var(--spacing-xs);
+}
+
+.sidebar-filter {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border-light);
+}
+
+.sidebar-filter .form-group label {
+    color: var(--color-text-light);
+    font-weight: 600;
+}
+
+.sidebar-filter .form-control {
+    background-color: var(--color-primary-dark);
+    border-color: var(--color-border-light);
+    color: var(--color-text-light);
+}
+
+.sidebar-filter .checkbox-list label {
+    color: var(--color-text-muted);
+}
+
+.sidebar-filter .btn-default {
+    width: 100%;
+    margin-top: var(--spacing-md);
+}
+
+/* --- 7. Mobile Responsiveness --- */
+.mobi-toggler {
+    display: none; /* Hidden by default, replaced by custom toggle */
+}
+
+.mobile-menu-toggle {
+    display: none; /* Hidden on desktop */
+    background-color: var(--color-accent);
+    color: var(--color-text-light);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.mobile-menu-toggle .fa {
+    margin-right: var(--spacing-xs);
+}
+
+.header-navigation {
+    flex-grow: 1;
+    justify-content: flex-end; /* Align nav to the right */
+}
+
+.header-navigation ul {
+    flex-wrap: wrap; /* Allow nav items to wrap */
+}
+
+.header-navigation .mobile-logo-item {
+    display: none; /* Hide logo in nav on desktop */
+}
+
+@media (max-width: 991px) { /* Bootstrap's 'md' breakpoint for tablets/mobiles */
+    .header .container {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .site-logo {
+        order: 1;
+        flex-basis: 100%;
+        text-align: center;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .header-right-actions {
+        order: 2;
+        flex-basis: 100%;
+        justify-content: center;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .header-navigation {
+        order: 3;
+        flex-basis: 100%;
+        justify-content: center;
+    }
+
+    .header-navigation ul {
+        display: none; /* Hide nav by default on mobile */
+        flex-direction: column;
+        width: 100%;
+        background-color: var(--color-primary-dark);
+        border-top: 1px solid var(--color-border-light);
+        padding-top: var(--spacing-md);
+    }
+
+    .header-navigation ul.mobile-menu-active {
+        display: flex; /* Show when active */
+    }
+
+    .header-navigation ul li {
+        margin: 0;
+        width: 100%;
+        text-align: center;
+        border-bottom: 1px solid var(--color-secondary-dark);
+    }
+
+    .header-navigation ul li:last-child {
+        border-bottom: none;
+    }
+
+    .header-navigation ul li a {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    .header-navigation .dropdown-menu {
+        position: static; /* Make dropdowns expand inline */
+        width: 100%;
+        box-shadow: none;
+        border: none;
+        border-top: 1px solid var(--color-secondary-dark);
+        border-bottom: 1px solid var(--color-secondary-dark);
+    }
+
+    .mobile-menu-toggle {
+        display: block; /* Show hamburger menu toggle */
+        width: fit-content;
+        margin: 0 auto var(--spacing-md);
+    }
+
+    .header-navigation .mobile-logo-item {
+        display: block; /* Show logo in nav on mobile */
+        padding: var(--spacing-md) 0;
+    }
+
+    .header-navigation .mobile-logo-item img {
+        height: 40px;
+    }
+
+    .menu-search {
+        order: 4;
+        flex-basis: 100%;
+        margin-top: var(--spacing-md);
+    }
+
+    .menu-search .search-box {
+        width: 80%;
+        margin: 0 auto;
+    }
+
+    .sidebar {
+        display: none; /* Hide sidebar by default on mobile */
+        width: 100%;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .sidebar.mobile-sidebar-active {
+        display: block;
+    }
+
+    .mobile-sidebar-toggle {
+        display: block; /* Show toggle button for sidebar */
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .product-list {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Adjust product card size for smaller screens */
+    }
+
+    .battle-rock-hero-title {
+        font-size: 2.5em;
+    }
+
+    .battle-rock-hero-tagline {
+        font-size: 1.2em;
+    }
+}
+
+@media (max-width: 767px) { /* Further adjustments for very small screens */
+    .battle-rock-hero-title {
+        font-size: 2em;
+    }
+    .battle-rock-hero-tagline {
+        font-size: 1em;
+    }
+    .carousel-btn {
+        font-size: 1em;
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+}
+
+/* --- 8. Footer --- */
+.pre-footer {
+    background-color: var(--color-secondary-dark);
+    color: var(--color-text-muted);
+    padding: var(--spacing-xl) 0;
+    border-top: 1px solid var(--color-border-light);
+}
+
+.pre-footer h2 {
+    color: var(--color-text-light);
+    font-size: 1.2em;
+    margin-bottom: var(--spacing-md);
+}
+
+.pre-footer ul {
+    list-style: none;
+    padding: 0;
+}
+
+.pre-footer ul li a {
+    color: var(--color-text-muted);
+    padding: var(--spacing-xs) 0;
+    display: block;
+}
+
+.pre-footer ul li a:hover {
+    color: var(--color-accent);
+}
+
+.footer {
+    background-color: var(--color-primary-dark);
+    color: var(--color-text-muted);
+    padding: var(--spacing-md) 0;
+    border-top: 1px solid var(--color-border-light);
+    font-size: 0.9em;
+}
+
+.footer a {
+    color: var(--color-text-muted);
+}
+
+.footer a:hover {
+    color: var(--color-accent);
+}
+
+/* --- 9. Micro-interactions (already handled by .btn transitions) --- */
+/* Additional transitions can be added as needed for other elements */
+
+/* --- 10. Google Fonts Import --- */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Open+Sans:wght@400;600&display=swap');
+
+/* --- 11. Custom Metronic Overrides --- */
+/* Adjustments to override Metronic's default styles */
+.header .site-logo {
+    margin-right: var(--spacing-lg); /* Space between logo and nav */
+}
+
+.header-navigation ul.dropdown-menu {
+    margin-top: 0; /* Align dropdown with nav item */
+}
+
+.header-navigation .dropdown-submenu > .dropdown-menu {
+    left: 100%;
+    top: 0;
+    margin-top: -1px;
+}
+
+.header-navigation .dropdown-submenu:hover > .dropdown-menu {
+    display: block;
+}
+
+.header-navigation .dropdown-toggle::after {
+    display: inline-block;
+    margin-left: .255em;
+    vertical-align: .255em;
+    content: "";
+    border-top: .3em solid;
+    border-right: .3em solid transparent;
+    border-bottom: 0;
+    border-left: .3em solid transparent;
+}
+
+.header-navigation .dropdown-submenu .dropdown-toggle::after {
+    border-top: .3em solid transparent;
+    border-right: 0;
+    border-bottom: .3em solid transparent;
+    border-left: .3em solid;
+}
+
+/* Adjust Metronic's default padding/margins for consistency */
+.margin-bottom-35 { margin-bottom: var(--spacing-xl) !important; }
+.margin-bottom-40 { margin-bottom: var(--spacing-xl) !important; }
+.margin-bottom-25 { margin-bottom: var(--spacing-lg) !important; }
+.margin-bottom-15 { margin-bottom: var(--spacing-md) !important; }
+.margin-bottom-20 { margin-bottom: var(--spacing-md) !important; }
+
+/* Ensure main content has proper top padding when sticky header is active */
+body.shop-sticky-active .main {
+    padding-top: var(--sticky-header-offset);
+}
+
+/* Adjustments for the Metronic carousel indicators */
+.carousel-indicators li {
+    background-color: var(--color-text-muted);
+    border: 1px solid var(--color-text-muted);
+}
+
+.carousel-indicators .active {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+/* Override Metronic's default search button styling */
+.menu-search .input-group-btn .btn {
+    height: 34px; /* Match input height */
+}
+
+/* Adjustments for Metronic's default product item layout */
+.product-item h3 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+}
+
+.product-item .pi-price {
+    font-family: var(--font-heading);
+}
+
+/* Hide default Metronic mobile toggler if custom one is used */
+.mobi-toggler {
+    display: none;
+}
+
+/* Ensure the custom mobile menu toggle is visible when needed */
+@media (max-width: 991px) {
+    .mobi-toggler {
+        display: none;
+    }
+    .mobile-menu-toggle {
+        display: block;
+    }
+}
+
+/* Adjustments for Metronic's default footer links */
+.pre-footer .list-unstyled li .fa {
+    color: var(--color-accent);
+    margin-right: var(--spacing-xs);
+}
+
+/* Adjustments for Metronic's default social icons */
+.social-icons li a {
+    background-color: var(--color-secondary-dark);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--color-text-light);
+    transition: background-color 0.3s ease;
+}
+
+.social-icons li a:hover {
+    background-color: var(--color-accent);
+}
+
+/* Sticky WhatsApp button */
+.shop-whatsapp-float {
+    position: fixed;
+    bottom: var(--spacing-xl);
+    right: var(--spacing-xl);
+    background-color: #25d366; /* WhatsApp green */
+    color: white;
+    border-radius: 50px;
+    text-align: center;
+    font-size: 1.2em;
+    padding: var(--spacing-sm) var(--spacing-md);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+}
+
+.shop-whatsapp-float:hover {
+    background-color: #128c7e;
+    transform: scale(1.05);
+}
+
+.shop-whatsapp-float .shop-whatsapp-icon svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+/* Toast notifications */
+.shop-toast-stack {
+    position: fixed;
+    bottom: var(--spacing-xl);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.shop-toast {
+    background-color: var(--color-secondary-dark);
+    color: var(--color-text-light);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: 5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+
+.shop-toast.success {
+    background-color: #28a745;
+}
+
+.shop-toast.error {
+    background-color: #dc3545;
+}
+
+.shop-toast.info {
+    background-color: #17a2b8;
+}
