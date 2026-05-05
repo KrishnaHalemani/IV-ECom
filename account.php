@@ -63,88 +63,118 @@ if ($orders !== []) {
     }
 }
 ?>
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Account</title>
-  <link href="assets/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <title>My Account | Metronic Shop UI</title>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
   <link href="assets/plugins/font-awesome/css/font-awesome.min.css" rel="stylesheet">
-  <style>
-    body { background: #f5f7fb; }
-    .wrap { max-width: 1020px; margin: 28px auto; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 18px; margin-bottom: 16px; }
-    .muted { color: #6b7280; }
-    .order-item { border-top: 1px solid #edf0f3; padding-top: 10px; margin-top: 10px; }
-    .top-links a { margin-right: 12px; }
-  </style>
+  <link href="assets/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="assets/pages/css/components.css" rel="stylesheet">
+  <link href="assets/corporate/css/style.css" rel="stylesheet">
+  <link href="assets/pages/css/style-shop.css" rel="stylesheet" type="text/css">
+  <link href="assets/corporate/css/style-responsive.css" rel="stylesheet">
+  <link href="assets/corporate/css/themes/red.css" rel="stylesheet" id="style-color">
+  <link href="assets/corporate/css/custom.css" rel="stylesheet">
+  <link href="assets/pages/css/shop-modern.css" rel="stylesheet">
 </head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div class="row">
-        <div class="col-sm-8">
-          <h2 style="margin-top:0;">My Account</h2>
-          <p class="muted">Welcome, <?php echo auth_h(trim((string) ($user['name'] ?? $user['full_name'] ?? 'User'))); ?></p>
-          <p class="muted"><?php echo auth_h((string) ($user['email'] ?? '')); ?></p>
-        </div>
-        <div class="col-sm-4 text-right top-links">
-          <a class="btn btn-default" href="shop-index.php">Continue Shopping</a>
-          <a class="btn btn-primary" href="user-logout.php">Logout</a>
-        </div>
-      </div>
-    </div>
+<body class="ecommerce">
+  <?php require_once __DIR__ . '/includes/shop-header.php'; ?>
 
-    <?php if ($successMessage !== ''): ?>
-      <div class="card" style="border-color:#b7e4c7;background:#ecfdf5;color:#065f46;">
-        <?php echo auth_h($successMessage); ?>
-      </div>
-    <?php endif; ?>
+  <div class="main">
+    <div class="container">
+      <ul class="breadcrumb">
+        <li><a href="shop-index.php">Home</a></li>
+        <li class="active">My Account</li>
+      </ul>
 
-    <div class="card">
-      <h3 style="margin-top:0;">My Orders</h3>
-      <?php if ($orders === []): ?>
-        <p class="muted">No orders yet.</p>
-      <?php else: ?>
-        <?php foreach ($orders as $order): ?>
-          <div class="order-item">
-            <div class="row">
-              <div class="col-sm-7">
-                <strong>Order #<?php echo (int) $order['id']; ?></strong>
-                <div class="muted">Placed: <?php echo auth_h((string) $order['created_at']); ?></div>
-              </div>
-              <div class="col-sm-5 text-right">
-                <span class="label label-info"><?php echo auth_h(ucfirst((string) $order['status'])); ?></span>
-                <div><strong>$<?php echo number_format((float) $order['total_amount'], 2); ?></strong></div>
+      <div class="row margin-bottom-40">
+        <div class="col-md-12">
+          <h1>My Account</h1>
+          <div class="content-page">
+            <div class="panel panel-default" style="margin-bottom:16px;">
+              <div class="panel-body">
+                <div class="row">
+                  <div class="col-sm-8">
+                    <p class="margin-bottom-5">Welcome, <strong><?php echo auth_h(trim((string) ($user['name'] ?? $user['full_name'] ?? 'User'))); ?></strong></p>
+                    <p class="text-muted"><?php echo auth_h((string) ($user['email'] ?? '')); ?></p>
+                  </div>
+                  <div class="col-sm-4 text-right">
+                    <a class="btn btn-default margin-bottom-10" href="shop-index.php">Continue Shopping</a>
+                    <a class="btn btn-primary margin-bottom-10" href="user-logout.php">Logout</a>
+                  </div>
+                </div>
               </div>
             </div>
-            <?php if ($order['items'] !== []): ?>
-              <table class="table table-bordered table-striped" style="margin-top:10px;">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach ($order['items'] as $item): ?>
-                    <tr>
-                      <td><?php echo auth_h((string) $item['name']); ?></td>
-                      <td><?php echo (int) $item['quantity']; ?></td>
-                      <td>$<?php echo number_format((float) $item['price'], 2); ?></td>
-                      <td>$<?php echo number_format((float) $item['price'] * (int) $item['quantity'], 2); ?></td>
-                    </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
+
+            <?php if ($successMessage !== ''): ?>
+              <div class="alert alert-success"><?php echo auth_h($successMessage); ?></div>
+            <?php endif; ?>
+
+            <h3>My Orders</h3>
+            <?php if ($orders === []): ?>
+              <div class="alert alert-info">No orders yet.</div>
+            <?php else: ?>
+              <?php foreach ($orders as $order): ?>
+                <div class="panel panel-default">
+                  <div class="panel-heading">
+                    <div class="row">
+                      <div class="col-sm-8">
+                        <strong>Order #<?php echo (int) $order['id']; ?></strong>
+                        <div class="text-muted">Placed: <?php echo auth_h((string) $order['created_at']); ?></div>
+                      </div>
+                      <div class="col-sm-4 text-right">
+                        <span class="label label-info"><?php echo auth_h(ucfirst((string) $order['status'])); ?></span>
+                        <div><strong>INR <?php echo number_format((float) $order['total_amount'], 2); ?></strong></div>
+                      </div>
+                    </div>
+                  </div>
+                  <?php if ($order['items'] !== []): ?>
+                    <div class="table-responsive">
+                      <table class="table table-bordered table-striped margin-bottom-0">
+                        <thead>
+                          <tr>
+                            <th>Product</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <?php foreach ($order['items'] as $item): ?>
+                            <tr>
+                              <td><?php echo auth_h((string) $item['name']); ?></td>
+                              <td><?php echo (int) $item['quantity']; ?></td>
+                              <td>INR <?php echo number_format((float) $item['price'], 2); ?></td>
+                              <td>INR <?php echo number_format((float) $item['price'] * (int) $item['quantity'], 2); ?></td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                  <?php endif; ?>
+                </div>
+              <?php endforeach; ?>
             <?php endif; ?>
           </div>
-        <?php endforeach; ?>
-      <?php endif; ?>
+        </div>
+      </div>
     </div>
   </div>
+
+  <?php require_once __DIR__ . '/includes/shop-footer.php'; ?>
+
+  <script src="assets/plugins/jquery.min.js" type="text/javascript"></script>
+  <script src="assets/plugins/jquery-migrate.min.js" type="text/javascript"></script>
+  <script src="assets/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+  <script src="assets/corporate/scripts/layout.js" type="text/javascript"></script>
+  <script src="assets/pages/scripts/shop-modern.js" type="text/javascript"></script>
+  <script type="text/javascript">
+    jQuery(document).ready(function() {
+      Layout.init();
+    });
+  </script>
 </body>
 </html>

@@ -7,6 +7,22 @@ if (auth_current_user_id() <= 0) {
     header('Location: login.php?next=' . rawurlencode('shop-checkout.php'));
     exit;
 }
+$user = auth_get_user_by_id(auth_current_user_id()) ?? [];
+$displayName = trim((string) ($user['name'] ?? ''));
+if ($displayName === '') {
+    $displayName = trim((string) ($user['full_name'] ?? ''));
+}
+$nameParts = preg_split('/\s+/', $displayName, 2) ?: [];
+$firstName = trim((string) ($nameParts[0] ?? ''));
+$lastName = trim((string) ($nameParts[1] ?? ''));
+$userEmail = trim((string) ($user['email'] ?? ''));
+$userPhone = trim((string) ($user['phone'] ?? ''));
+$userAddress1 = trim((string) ($user['address_line1'] ?? ''));
+$userAddress2 = trim((string) ($user['address_line2'] ?? ''));
+$userCity = trim((string) ($user['city'] ?? ''));
+$userState = trim((string) ($user['state'] ?? ''));
+$userCountry = trim((string) ($user['country'] ?? ''));
+$userPostal = trim((string) ($user['postal_code'] ?? ''));
 ?>
 <!DOCTYPE html>
 <!--
@@ -69,362 +85,34 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
   <link href="assets/corporate/css/themes/red.css" rel="stylesheet" id="style-color">
   <link href="assets/corporate/css/custom.css" rel="stylesheet">
   <link href="assets/pages/css/shop-modern.css" rel="stylesheet">
+  <style>
+    #checkout,
+    #shipping-address,
+    #shipping-method,
+    #fax,
+    #password,
+    #password-confirm,
+    #company,
+    #payment-address-content .checkbox,
+    #button-payment-address {
+      display: none !important;
+    }
+    label[for="fax"],
+    label[for="password"],
+    label[for="password-confirm"],
+    label[for="company"] {
+      display: none !important;
+    }
+    #payment-address-content { display: block !important; }
+    #payment-method-content, #confirm-content { display: block !important; }
+  </style>
   <!-- Theme styles END -->
 </head>
 <!-- Head END -->
 
 <!-- Body BEGIN -->
 <body class="ecommerce">
-    <!-- BEGIN STYLE CUSTOMIZER -->
-    <div class="color-panel hidden-sm">
-      <div class="color-mode-icons icon-color"></div>
-      <div class="color-mode-icons icon-color-close"></div>
-      <div class="color-mode">
-        <p>THEME COLOR</p>
-        <ul class="inline">
-          <li class="color-red current color-default" data-style="red"></li>
-          <li class="color-blue" data-style="blue"></li>
-          <li class="color-green" data-style="green"></li>
-          <li class="color-orange" data-style="orange"></li>
-          <li class="color-gray" data-style="gray"></li>
-          <li class="color-turquoise" data-style="turquoise"></li>
-        </ul>
-      </div>
-    </div>
-    <!-- END BEGIN STYLE CUSTOMIZER --> 
-
-    <!-- BEGIN TOP BAR -->
-    <div class="pre-header">
-        <div class="container">
-            <div class="row">
-                <!-- BEGIN TOP BAR LEFT PART -->
-                <div class="col-md-6 col-sm-6 additional-shop-info">
-                    <ul class="list-unstyled list-inline">
-                        <li><i class="fa fa-phone"></i><span>+1 456 6717</span></li>
-                        <!-- BEGIN CURRENCIES -->
-                        <li class="shop-currencies">
-                            <a href="javascript:void(0);">€</a>
-                            <a href="javascript:void(0);">£</a>
-                            <a href="javascript:void(0);" class="current">$</a>
-                        </li>
-                        <!-- END CURRENCIES -->
-                        <!-- BEGIN LANGS -->
-                        <li class="langs-block">
-                            <a href="javascript:void(0);" class="current">English </a>
-                            <div class="langs-block-others-wrapper"><div class="langs-block-others">
-                              <a href="javascript:void(0);">French</a>
-                              <a href="javascript:void(0);">Germany</a>
-                              <a href="javascript:void(0);">Turkish</a>
-                            </div></div>
-                        </li>
-                        <!-- END LANGS -->
-                    </ul>
-                </div>
-                <!-- END TOP BAR LEFT PART -->
-                <!-- BEGIN TOP BAR MENU -->
-                <div class="col-md-6 col-sm-6 additional-nav">
-                    <ul class="list-unstyled list-inline pull-right">
-                        <li><a href="shop-account.php">My Account</a></li>
-                        <li><a href="shop-wishlist.php">My Wishlist</a></li>
-                        <li><a href="shop-checkout.php">Checkout</a></li>
-                        <li><a href="google-login.php">Log In</a></li>
-                    </ul>
-                </div>
-                <!-- END TOP BAR MENU -->
-            </div>
-        </div>        
-    </div>
-    <!-- END TOP BAR -->
-
-    <!-- BEGIN HEADER -->
-    <div class="header">
-      <div class="container">
-        <a class="site-logo" href="shop-index.php"><img src="assets/corporate/img/logos/logo-shop-red.png" alt="Metronic Shop UI"></a>
-
-        <a href="javascript:void(0);" class="mobi-toggler"><i class="fa fa-bars"></i></a>
-
-        <!-- BEGIN CART -->
-        <div class="top-cart-block">
-          <div class="top-cart-info">
-            <a href="javascript:void(0);" class="top-cart-info-count">3 items</a>
-            <a href="javascript:void(0);" class="top-cart-info-value">$1260</a>
-          </div>
-          <i class="fa fa-shopping-cart"></i>
-                        
-          <div class="top-cart-content-wrapper">
-            <div class="top-cart-content">
-              <ul class="scroller" style="height: 250px;">
-                <li>
-                  <a href="shop-item.php"><img src="assets/pages/img/cart-img.jpg" alt="Rolex Classic Watch" width="37" height="34"></a>
-                  <span class="cart-content-count">x 1</span>
-                  <strong><a href="shop-item.php">Rolex Classic Watch</a></strong>
-                  <em>$1230</em>
-                  <a href="javascript:void(0);" class="del-goods">&nbsp;</a>
-                </li>
-                <li>
-                  <a href="shop-item.php"><img src="assets/pages/img/cart-img.jpg" alt="Rolex Classic Watch" width="37" height="34"></a>
-                  <span class="cart-content-count">x 1</span>
-                  <strong><a href="shop-item.php">Rolex Classic Watch</a></strong>
-                  <em>$1230</em>
-                  <a href="javascript:void(0);" class="del-goods">&nbsp;</a>
-                </li>
-                <li>
-                  <a href="shop-item.php"><img src="assets/pages/img/cart-img.jpg" alt="Rolex Classic Watch" width="37" height="34"></a>
-                  <span class="cart-content-count">x 1</span>
-                  <strong><a href="shop-item.php">Rolex Classic Watch</a></strong>
-                  <em>$1230</em>
-                  <a href="javascript:void(0);" class="del-goods">&nbsp;</a>
-                </li>
-                <li>
-                  <a href="shop-item.php"><img src="assets/pages/img/cart-img.jpg" alt="Rolex Classic Watch" width="37" height="34"></a>
-                  <span class="cart-content-count">x 1</span>
-                  <strong><a href="shop-item.php">Rolex Classic Watch</a></strong>
-                  <em>$1230</em>
-                  <a href="javascript:void(0);" class="del-goods">&nbsp;</a>
-                </li>
-                <li>
-                  <a href="shop-item.php"><img src="assets/pages/img/cart-img.jpg" alt="Rolex Classic Watch" width="37" height="34"></a>
-                  <span class="cart-content-count">x 1</span>
-                  <strong><a href="shop-item.php">Rolex Classic Watch</a></strong>
-                  <em>$1230</em>
-                  <a href="javascript:void(0);" class="del-goods">&nbsp;</a>
-                </li>
-                <li>
-                  <a href="shop-item.php"><img src="assets/pages/img/cart-img.jpg" alt="Rolex Classic Watch" width="37" height="34"></a>
-                  <span class="cart-content-count">x 1</span>
-                  <strong><a href="shop-item.php">Rolex Classic Watch</a></strong>
-                  <em>$1230</em>
-                  <a href="javascript:void(0);" class="del-goods">&nbsp;</a>
-                </li>
-                <li>
-                  <a href="shop-item.php"><img src="assets/pages/img/cart-img.jpg" alt="Rolex Classic Watch" width="37" height="34"></a>
-                  <span class="cart-content-count">x 1</span>
-                  <strong><a href="shop-item.php">Rolex Classic Watch</a></strong>
-                  <em>$1230</em>
-                  <a href="javascript:void(0);" class="del-goods">&nbsp;</a>
-                </li>
-                <li>
-                  <a href="shop-item.php"><img src="assets/pages/img/cart-img.jpg" alt="Rolex Classic Watch" width="37" height="34"></a>
-                  <span class="cart-content-count">x 1</span>
-                  <strong><a href="shop-item.php">Rolex Classic Watch</a></strong>
-                  <em>$1230</em>
-                  <a href="javascript:void(0);" class="del-goods">&nbsp;</a>
-                </li>
-              </ul>
-              <div class="text-right">
-                <a href="shop-shopping-cart.php" class="btn btn-default">View Cart</a>
-                <a href="shop-checkout.php" class="btn btn-primary">Checkout</a>
-              </div>
-            </div>
-          </div>            
-        </div>
-        <!--END CART -->
-
-        <!-- BEGIN NAVIGATION -->
-        <div class="header-navigation">
-          <ul>
-            <li class="dropdown">
-              <a class="dropdown-toggle" data-toggle="dropdown" data-target="#" href="javascript:;">
-                Woman 
-                
-              </a>
-                
-              <!-- BEGIN DROPDOWN MENU -->
-              <ul class="dropdown-menu">
-                <li class="dropdown-submenu">
-                  <a href="shop-product-list.php">Hi Tops <i class="fa fa-angle-right"></i></a>
-                  <ul class="dropdown-menu" role="menu">
-                    <li><a href="shop-product-list.php">Second Level Link</a></li>
-                    <li><a href="shop-product-list.php">Second Level Link</a></li>
-                    <li class="dropdown-submenu">
-                      <a class="dropdown-toggle" data-toggle="dropdown" data-target="#" href="javascript:;">
-                        Second Level Link 
-                        <i class="fa fa-angle-right"></i>
-                      </a>
-                      <ul class="dropdown-menu">
-                        <li><a href="shop-product-list.php">Third Level Link</a></li>
-                        <li><a href="shop-product-list.php">Third Level Link</a></li>
-                        <li><a href="shop-product-list.php">Third Level Link</a></li>
-                      </ul>
-                    </li>
-                  </ul>
-                </li>
-                <li><a href="shop-product-list.php">Running Shoes</a></li>
-                <li><a href="shop-product-list.php">Jackets and Coats</a></li>
-              </ul>
-              <!-- END DROPDOWN MENU -->
-            </li>
-            <li class="dropdown dropdown-megamenu">
-              <a class="dropdown-toggle" data-toggle="dropdown" data-target="#" href="javascript:;">
-                Man
-                
-              </a>
-              <ul class="dropdown-menu">
-                <li>
-                  <div class="header-navigation-content">
-                    <div class="row">
-                      <div class="col-md-4 header-navigation-col">
-                        <h4>Footwear</h4>
-                        <ul>
-                          <li><a href="shop-product-list.php">Astro Trainers</a></li>
-                          <li><a href="shop-product-list.php">Basketball Shoes</a></li>
-                          <li><a href="shop-product-list.php">Boots</a></li>
-                          <li><a href="shop-product-list.php">Canvas Shoes</a></li>
-                          <li><a href="shop-product-list.php">Football Boots</a></li>
-                          <li><a href="shop-product-list.php">Golf Shoes</a></li>
-                          <li><a href="shop-product-list.php">Hi Tops</a></li>
-                          <li><a href="shop-product-list.php">Indoor and Court Trainers</a></li>
-                        </ul>
-                      </div>
-                      <div class="col-md-4 header-navigation-col">
-                        <h4>Clothing</h4>
-                        <ul>
-                          <li><a href="shop-product-list.php">Base Layer</a></li>
-                          <li><a href="shop-product-list.php">Character</a></li>
-                          <li><a href="shop-product-list.php">Chinos</a></li>
-                          <li><a href="shop-product-list.php">Combats</a></li>
-                          <li><a href="shop-product-list.php">Cricket Clothing</a></li>
-                          <li><a href="shop-product-list.php">Fleeces</a></li>
-                          <li><a href="shop-product-list.php">Gilets</a></li>
-                          <li><a href="shop-product-list.php">Golf Tops</a></li>
-                        </ul>
-                      </div>
-                      <div class="col-md-4 header-navigation-col">
-                        <h4>Accessories</h4>
-                        <ul>
-                          <li><a href="shop-product-list.php">Belts</a></li>
-                          <li><a href="shop-product-list.php">Caps</a></li>
-                          <li><a href="shop-product-list.php">Gloves, Hats and Scarves</a></li>
-                        </ul>
-
-                        <h4>Clearance</h4>
-                        <ul>
-                          <li><a href="shop-product-list.php">Jackets</a></li>
-                          <li><a href="shop-product-list.php">Bottoms</a></li>
-                        </ul>
-                      </div>
-                      <div class="col-md-12 nav-brands">
-                        <ul>
-                          <li><a href="shop-product-list.php"><img title="esprit" alt="esprit" src="assets/pages/img/brands/esprit.jpg"></a></li>
-                          <li><a href="shop-product-list.php"><img title="gap" alt="gap" src="assets/pages/img/brands/gap.jpg"></a></li>
-                          <li><a href="shop-product-list.php"><img title="next" alt="next" src="assets/pages/img/brands/next.jpg"></a></li>
-                          <li><a href="shop-product-list.php"><img title="puma" alt="puma" src="assets/pages/img/brands/puma.jpg"></a></li>
-                          <li><a href="shop-product-list.php"><img title="zara" alt="zara" src="assets/pages/img/brands/zara.jpg"></a></li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              </ul>
-            </li>
-            <li><a href="shop-item.php">Kids</a></li>
-            <li class="dropdown dropdown100 nav-catalogue">
-              <a class="dropdown-toggle" data-toggle="dropdown" data-target="#" href="javascript:;">
-                New
-                
-              </a>
-              <ul class="dropdown-menu">
-                <li>
-                  <div class="header-navigation-content">
-                    <div class="row">
-                      <div class="col-md-3 col-sm-4 col-xs-6">
-                        <div class="product-item">
-                          <div class="pi-img-wrapper">
-                            <a href="shop-item.php"><img src="assets/pages/img/products/model4.jpg" class="img-responsive" alt="Berry Lace Dress"></a>
-                          </div>
-                          <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                          <div class="pi-price">$29.00</div>
-                          <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                        </div>
-                      </div>
-                      <div class="col-md-3 col-sm-4 col-xs-6">
-                        <div class="product-item">
-                          <div class="pi-img-wrapper">
-                            <a href="shop-item.php"><img src="assets/pages/img/products/model3.jpg" class="img-responsive" alt="Berry Lace Dress"></a>
-                          </div>
-                          <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                          <div class="pi-price">$29.00</div>
-                          <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                        </div>
-                      </div>
-                      <div class="col-md-3 col-sm-4 col-xs-6">
-                        <div class="product-item">
-                          <div class="pi-img-wrapper">
-                            <a href="shop-item.php"><img src="assets/pages/img/products/model7.jpg" class="img-responsive" alt="Berry Lace Dress"></a>
-                          </div>
-                          <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                          <div class="pi-price">$29.00</div>
-                          <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                        </div>
-                      </div>
-                      <div class="col-md-3 col-sm-4 col-xs-6">
-                        <div class="product-item">
-                          <div class="pi-img-wrapper">
-                            <a href="shop-item.php"><img src="assets/pages/img/products/model4.jpg" class="img-responsive" alt="Berry Lace Dress"></a>
-                          </div>
-                          <h3><a href="shop-item.php">Berry Lace Dress</a></h3>
-                          <div class="pi-price">$29.00</div>
-                          <a href="javascript:;" class="btn btn-default add2cart">Add to cart</a>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              </ul>
-            </li>
-            <li class="dropdown active">
-              <a class="dropdown-toggle" data-toggle="dropdown" data-target="#" href="javascript:;">
-                Pages 
-                
-              </a>
-                
-              <ul class="dropdown-menu">
-                <li><a href="shop-index.php">Home Default</a></li>
-                <li><a href="shop-index-header-fix.php">Home Header Fixed</a></li>
-                <li><a href="shop-index-light-footer.php">Home Light Footer</a></li>
-                <li><a href="shop-product-list.php">Product List</a></li>
-                <li><a href="shop-search-result.php">Search Result</a></li>
-                <li><a href="shop-item.php">Product Page</a></li>
-                <li><a href="shop-shopping-cart-null.php">Shopping Cart (Null Cart)</a></li>
-                <li><a href="shop-shopping-cart.php">Shopping Cart</a></li>
-                <li class="active"><a href="shop-checkout.php">Checkout</a></li>
-                <li><a href="shop-about.php">About</a></li>
-                <li><a href="shop-contacts.php">Contacts</a></li>
-                <li><a href="shop-account.php">My account</a></li>
-                <li><a href="shop-wishlist.php">My Wish List</a></li>
-                <li><a href="shop-goods-compare.php">Product Comparison</a></li>
-                <li><a href="shop-standart-forms.php">Standart Forms</a></li>
-                <li><a href="shop-faq.php">FAQ</a></li>
-                <li><a href="shop-privacy-policy.php">Privacy Policy</a></li>
-                <li><a href="shop-terms-conditions-page.php">Terms &amp; Conditions</a></li>
-              </ul>
-            </li>
-            
-            
-            <li><a href="http://themeforest.net/item/metronic-responsive-admin-dashboard-template/4021469?ref=keenthemes&amp;utm_source=download&amp;utm_medium=banner&amp;utm_campaign=metronic_frontend_freebie" target="_blank">Admin theme</a></li>
-
-            <!-- BEGIN TOP SEARCH -->
-            <li class="menu-search">
-              <span class="sep"></span>
-              <i class="fa fa-search search-btn"></i>
-              <div class="search-box">
-                <form action="form-submit.php" method="post">
-                  <div class="input-group">
-                    <input type="text" placeholder="Search" class="form-control" name="search">
-                    <span class="input-group-btn">
-                      <button class="btn btn-primary" type="submit">Search</button>
-                    </span>
-                  </div>
-                </form>
-              </div> 
-            </li>
-            <!-- END TOP SEARCH -->
-          </ul>
-        </div>
-        <!-- END NAVIGATION -->
-      </div>
-    </div>
-    <!-- Header END -->
+    <?php require_once __DIR__ . '/includes/shop-header.php'; ?>
 
     <div class="main">
       <div class="container">
@@ -509,24 +197,28 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   </h2>
                 </div>
                 <div id="payment-address-content" class="panel-collapse collapse">
+                  <div class="alert alert-info" style="margin:15px;">
+                    Signed in as <strong><?php echo auth_h($displayName !== '' ? $displayName : 'Customer'); ?></strong>
+                    (<?php echo auth_h($userEmail); ?>). Account details are pre-filled below.
+                  </div>
                   <div class="panel-body row">
                     <div class="col-md-6 col-sm-6">
                       <h3>Your Personal Details</h3>
                       <div class="form-group">
                         <label for="firstname">First Name <span class="require">*</span></label>
-                        <input type="text" id="firstname" class="form-control" name="firstname">
+                        <input type="text" id="firstname" class="form-control" name="firstname" value="<?php echo auth_h($firstName); ?>" autocomplete="given-name">
                       </div>
                       <div class="form-group">
                         <label for="lastname">Last Name <span class="require">*</span></label>
-                        <input type="text" id="lastname" class="form-control" name="lastname">
+                        <input type="text" id="lastname" class="form-control" name="lastname" value="<?php echo auth_h($lastName); ?>" autocomplete="family-name">
                       </div>
                       <div class="form-group">
                         <label for="email">E-Mail <span class="require">*</span></label>
-                        <input type="text" id="email" class="form-control" name="email">
+                        <input type="email" id="email" class="form-control" name="email" value="<?php echo auth_h($userEmail); ?>" readonly>
                       </div>
                       <div class="form-group">
                         <label for="telephone">Telephone <span class="require">*</span></label>
-                        <input type="text" id="telephone" class="form-control" name="telephone">
+                        <input type="text" id="telephone" class="form-control" name="telephone" value="<?php echo auth_h($userPhone); ?>" autocomplete="tel">
                       </div>
                       <div class="form-group">
                         <label for="fax">Fax</label>
@@ -551,34 +243,27 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                       </div>
                       <div class="form-group">
                         <label for="address1">Address 1</label>
-                        <input type="text" id="address1" class="form-control" name="address1">
+                        <input type="text" id="address1" class="form-control" name="address1" value="<?php echo auth_h($userAddress1); ?>" autocomplete="address-line1">
                       </div>
                       <div class="form-group">
                         <label for="address2">Address 2</label>
-                        <input type="text" id="address2" class="form-control" name="address2">
+                        <input type="text" id="address2" class="form-control" name="address2" value="<?php echo auth_h($userAddress2); ?>" autocomplete="address-line2">
                       </div>
                       <div class="form-group">
                         <label for="city">City <span class="require">*</span></label>
-                        <input type="text" id="city" class="form-control" name="city">
+                        <input type="text" id="city" class="form-control" name="city" value="<?php echo auth_h($userCity); ?>" autocomplete="address-level2">
                       </div>
                       <div class="form-group">
                         <label for="post-code">Post Code <span class="require">*</span></label>
-                        <input type="text" id="post-code" class="form-control" name="post-code">
+                        <input type="text" id="post-code" class="form-control" name="post-code" value="<?php echo auth_h($userPostal); ?>" autocomplete="postal-code">
                       </div>
                       <div class="form-group">
                         <label for="country">Country <span class="require">*</span></label>
-                        <select class="form-control input-sm" id="country" name="country">
-                          <option value=""> --- Please Select --- </option>
-                          <option value="244">Aaland Islands</option>
-                          <option value="1">Afghanistan</option>
-                          <option value="2">Albania</option>
-                        </select>
+                        <input type="text" id="country" class="form-control" name="country" value="<?php echo auth_h($userCountry); ?>" autocomplete="country-name" placeholder="Country">
                       </div>
                       <div class="form-group">
                         <label for="region-state">Region/State <span class="require">*</span></label>
-                        <select class="form-control input-sm" id="region-state" name="region-state">
-                          <option value=""> --- Please Select --- </option><option value="3513">Aberdeen</option><option value="3514">Aberdeenshire</option><option value="3515">Anglesey</option>
-                        </select>
+                        <input type="text" id="region-state" class="form-control" name="region-state" value="<?php echo auth_h($userState); ?>" autocomplete="address-level1" placeholder="State / Region">
                       </div>
                     </div>
                     <hr>
@@ -619,19 +304,19 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <div class="col-md-6 col-sm-6">
                       <div class="form-group">
                         <label for="firstname-dd">First Name <span class="require">*</span></label>
-                        <input type="text" id="firstname-dd" class="form-control" name="firstname-dd">
+                        <input type="text" id="firstname-dd" class="form-control" name="firstname-dd" value="<?php echo auth_h($firstName); ?>" autocomplete="given-name">
                       </div>
                       <div class="form-group">
                         <label for="lastname-dd">Last Name <span class="require">*</span></label>
-                        <input type="text" id="lastname-dd" class="form-control" name="lastname-dd">
+                        <input type="text" id="lastname-dd" class="form-control" name="lastname-dd" value="<?php echo auth_h($lastName); ?>" autocomplete="family-name">
                       </div>
                       <div class="form-group">
                         <label for="email-dd">E-Mail <span class="require">*</span></label>
-                        <input type="text" id="email-dd" class="form-control" name="email-dd">
+                        <input type="email" id="email-dd" class="form-control" name="email-dd" value="<?php echo auth_h($userEmail); ?>" readonly>
                       </div>
                       <div class="form-group">
                         <label for="telephone-dd">Telephone <span class="require">*</span></label>
-                        <input type="text" id="telephone-dd" class="form-control" name="telephone-dd">
+                        <input type="text" id="telephone-dd" class="form-control" name="telephone-dd" value="<?php echo auth_h($userPhone); ?>" autocomplete="tel">
                       </div>
                       <div class="form-group">
                         <label for="fax-dd">Fax</label>
@@ -728,14 +413,17 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                       <p>Please select the preferred payment method to use on this order.</p>
                       <div class="radio-list">
                         <label>
-                          <input type="radio" name="CashOnDelivery" value="CashOnDelivery"> Cash On Delivery
+                          <input type="radio" name="payment_method" value="razorpay" checked="checked"> Razorpay (UPI, Cards, Netbanking, Wallets)
+                        </label>
+                        <label>
+                          <input type="radio" name="payment_method" value="cod"> Cash On Delivery
                         </label>
                       </div>
                       <div class="form-group">
                         <label for="delivery-payment-method">Add Comments About Your Order</label>
                         <textarea id="delivery-payment-method" rows="8" class="form-control" name="delivery-payment-method"></textarea>
                       </div>
-                      <button class="btn btn-primary  pull-right" type="submit" id="button-payment-method" data-toggle="collapse" data-parent="#checkout-page" data-target="#confirm-content">Continue</button>
+                      <button class="btn btn-primary  pull-right" type="submit" id="button-payment-method" data-toggle="collapse" data-parent="#checkout-page" data-target="#confirm-content">Review Order</button>
                       <div class="checkbox pull-right">
                         <label>
                           <input type="checkbox" name="checkbox_0"> I have read and agree to the <a title="Terms & Conditions" href="javascript:;">Terms & Conditions </a> &nbsp;&nbsp;&nbsp; 
@@ -840,150 +528,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
       </div>
     </div>
 
-    <!-- BEGIN STEPS -->
-    <div class="steps-block steps-block-red">
-      <div class="container">
-        <div class="row">
-          <div class="col-md-4 steps-block-col">
-            <i class="fa fa-truck"></i>
-            <div>
-              <h2>Free shipping</h2>
-              <em>Express delivery withing 3 days</em>
-            </div>
-            <span>&nbsp;</span>
-          </div>
-          <div class="col-md-4 steps-block-col">
-            <i class="fa fa-gift"></i>
-            <div>
-              <h2>Daily Gifts</h2>
-              <em>3 Gifts daily for lucky customers</em>
-            </div>
-            <span>&nbsp;</span>
-          </div>
-          <div class="col-md-4 steps-block-col">
-            <i class="fa fa-phone"></i>
-            <div>
-              <h2>477 505 8877</h2>
-              <em>24/7 customer care available</em>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!-- END STEPS -->
-
-    <!-- BEGIN PRE-FOOTER -->
-    <div class="pre-footer">
-      <div class="container">
-        <div class="row">
-          <!-- BEGIN BOTTOM ABOUT BLOCK -->
-          <div class="col-md-3 col-sm-6 pre-footer-col">
-            <h2>About us</h2>
-            <p>Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam sit nonummy nibh euismod tincidunt ut laoreet dolore magna aliquarm erat sit volutpat. Nostrud exerci tation ullamcorper suscipit lobortis nisl aliquip  commodo consequat. </p>
-            <p>Duis autem vel eum iriure dolor vulputate velit esse molestie at dolore.</p>
-          </div>
-          <!-- END BOTTOM ABOUT BLOCK -->
-          <!-- BEGIN BOTTOM INFO BLOCK -->
-          <div class="col-md-3 col-sm-6 pre-footer-col">
-            <h2>Information</h2>
-            <ul class="list-unstyled">
-              <li><i class="fa fa-angle-right"></i> <a href="javascript:;">Delivery Information</a></li>
-              <li><i class="fa fa-angle-right"></i> <a href="javascript:;">Customer Service</a></li>
-              <li><i class="fa fa-angle-right"></i> <a href="javascript:;">Order Tracking</a></li>
-              <li><i class="fa fa-angle-right"></i> <a href="javascript:;">Shipping &amp; Returns</a></li>
-              <li><i class="fa fa-angle-right"></i> <a href="shop-contacts.php">Contact Us</a></li>
-              <li><i class="fa fa-angle-right"></i> <a href="javascript:;">Careers</a></li>
-              <li><i class="fa fa-angle-right"></i> <a href="javascript:;">Payment Methods</a></li>
-            </ul>
-          </div>
-          <!-- END INFO BLOCK -->
-
-          <!-- BEGIN TWITTER BLOCK --> 
-          <div class="col-md-3 col-sm-6 pre-footer-col">
-            <h2 class="margin-bottom-0">Latest Tweets</h2>
-            <a class="twitter-timeline" href="https://twitter.com/twitterapi" data-tweet-limit="2" data-theme="dark" data-link-color="#57C8EB" data-widget-id="455411516829736961" data-chrome="noheader nofooter noscrollbar noborders transparent">Loading tweets by @keenthemes...</a>      
-          </div>
-          <!-- END TWITTER BLOCK -->
-          
-          <!-- BEGIN BOTTOM CONTACTS -->
-          <div class="col-md-3 col-sm-6 pre-footer-col">
-            <h2>Our Contacts</h2>
-            <address class="margin-bottom-40">
-              35, Lorem Lis Street, Park Ave<br>
-              California, US<br>
-              Phone: 300 323 3456<br>
-              Fax: 300 323 1456<br>
-              Email: <a href="mailto:info@metronic.com">info@metronic.com</a><br>
-              Skype: <a href="skype:metronic">metronic</a>
-            </address>
-          </div>
-          <!-- END BOTTOM CONTACTS -->
-        </div>
-        <hr>
-        <div class="row">
-          <!-- BEGIN SOCIAL ICONS -->
-          <div class="col-md-6 col-sm-6">
-            <ul class="social-icons">
-              <li><a class="rss" data-original-title="rss" href="javascript:;"></a></li>
-              <li><a class="facebook" data-original-title="facebook" href="javascript:;"></a></li>
-              <li><a class="twitter" data-original-title="twitter" href="javascript:;"></a></li>
-              <li><a class="googleplus" data-original-title="googleplus" href="javascript:;"></a></li>
-              <li><a class="linkedin" data-original-title="linkedin" href="javascript:;"></a></li>
-              <li><a class="youtube" data-original-title="youtube" href="javascript:;"></a></li>
-              <li><a class="vimeo" data-original-title="vimeo" href="javascript:;"></a></li>
-              <li><a class="skype" data-original-title="skype" href="javascript:;"></a></li>
-            </ul>
-          </div>
-          <!-- END SOCIAL ICONS -->
-          <!-- BEGIN NEWLETTER -->
-          <div class="col-md-6 col-sm-6">
-            <div class="pre-footer-subscribe-box pull-right">
-              <h2>Newsletter</h2>
-              <form action="form-submit.php" method="post">
-                <div class="input-group">
-                  <input type="text" placeholder="youremail@mail.com" class="form-control" name="youremail_mail_com">
-                  <span class="input-group-btn">
-                    <button class="btn btn-primary" type="submit">Subscribe</button>
-                  </span>
-                </div>
-              </form>
-            </div> 
-          </div>
-          <!-- END NEWLETTER -->
-        </div>
-      </div>
-    </div>
-    <!-- END PRE-FOOTER -->
-
-    <!-- BEGIN FOOTER -->
-    <div class="footer">
-      <div class="container">
-        <div class="row">
-          <!-- BEGIN COPYRIGHT -->
-          <div class="col-md-4 col-sm-4 padding-top-10">
-            2015 © Keenthemes. ALL Rights Reserved. 
-          </div>
-          <!-- END COPYRIGHT -->
-          <!-- BEGIN PAYMENTS -->
-          <div class="col-md-4 col-sm-4">
-            <ul class="list-unstyled list-inline pull-right">
-              <li><img src="assets/corporate/img/payments/western-union.jpg" alt="We accept Western Union" title="We accept Western Union"></li>
-              <li><img src="assets/corporate/img/payments/american-express.jpg" alt="We accept American Express" title="We accept American Express"></li>
-              <li><img src="assets/corporate/img/payments/MasterCard.jpg" alt="We accept MasterCard" title="We accept MasterCard"></li>
-              <li><img src="assets/corporate/img/payments/PayPal.jpg" alt="We accept PayPal" title="We accept PayPal"></li>
-              <li><img src="assets/corporate/img/payments/visa.jpg" alt="We accept Visa" title="We accept Visa"></li>
-            </ul>
-          </div>
-          <!-- END PAYMENTS -->
-          <!-- BEGIN POWERED -->
-          <div class="col-md-4 col-sm-4 text-right">
-            <p class="powered">Powered by: <a href="http://www.keenthemes.com/">KeenThemes.com</a></p>
-          </div>
-          <!-- END POWERED -->
-        </div>
-      </div>
-    </div>
-    <!-- END FOOTER -->
+    <?php require_once __DIR__ . '/includes/shop-footer.php'; ?>
 
     <!-- Load javascripts at bottom, this will reduce page load time -->
     <!-- BEGIN CORE PLUGINS(REQUIRED FOR ALL PAGES) -->
@@ -1003,8 +548,15 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
     <script src='assets/plugins/zoom/jquery.zoom.min.js' type="text/javascript"></script><!-- product zoom -->
     <script src="assets/plugins/bootstrap-touchspin/bootstrap.touchspin.js" type="text/javascript"></script><!-- Quantity -->
     <script src="assets/plugins/uniform/jquery.uniform.min.js" type="text/javascript"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
     <script src="assets/corporate/scripts/layout.js" type="text/javascript"></script>
+    <script type="text/javascript">
+      window.checkoutProfilePrefill = {
+        country: "<?php echo auth_h($userCountry); ?>",
+        state: "<?php echo auth_h($userState); ?>"
+      };
+    </script>
     <script src="assets/pages/scripts/shop-modern.js" type="text/javascript"></script>
     <script src="assets/pages/scripts/checkout.js" type="text/javascript"></script>
     <script type="text/javascript">

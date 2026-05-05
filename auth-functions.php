@@ -69,6 +69,24 @@ function auth_ensure_schema(mysqli $db): void
     if (!auth_has_column($db, 'users', 'phone')) {
         $db->query("ALTER TABLE users ADD COLUMN phone VARCHAR(50) DEFAULT '' AFTER google_id");
     }
+    if (!auth_has_column($db, 'users', 'address_line1')) {
+        $db->query("ALTER TABLE users ADD COLUMN address_line1 VARCHAR(255) DEFAULT '' AFTER phone");
+    }
+    if (!auth_has_column($db, 'users', 'address_line2')) {
+        $db->query("ALTER TABLE users ADD COLUMN address_line2 VARCHAR(255) DEFAULT '' AFTER address_line1");
+    }
+    if (!auth_has_column($db, 'users', 'city')) {
+        $db->query("ALTER TABLE users ADD COLUMN city VARCHAR(120) DEFAULT '' AFTER address_line2");
+    }
+    if (!auth_has_column($db, 'users', 'state')) {
+        $db->query("ALTER TABLE users ADD COLUMN state VARCHAR(120) DEFAULT '' AFTER city");
+    }
+    if (!auth_has_column($db, 'users', 'country')) {
+        $db->query("ALTER TABLE users ADD COLUMN country VARCHAR(120) DEFAULT '' AFTER state");
+    }
+    if (!auth_has_column($db, 'users', 'postal_code')) {
+        $db->query("ALTER TABLE users ADD COLUMN postal_code VARCHAR(30) DEFAULT '' AFTER country");
+    }
     if (!auth_has_column($db, 'users', 'avatar_url')) {
         $db->query("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(255) DEFAULT '' AFTER phone");
     }
@@ -127,7 +145,7 @@ function auth_get_user_by_id(int $userId): ?array
 
     $db = auth_db();
     $stmt = $db->prepare(
-        "SELECT id, name, full_name, email, avatar_url, status, created_at, last_login_at
+        "SELECT id, name, full_name, email, phone, address_line1, address_line2, city, state, country, postal_code, avatar_url, status, created_at, last_login_at
          FROM users
          WHERE id = ?
          LIMIT 1"
@@ -170,6 +188,44 @@ function auth_get_user_by_email(string $email): ?array
     $stmt->close();
 
     return is_array($user) ? $user : null;
+}
+
+function auth_update_checkout_profile(int $userId, array $payload): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $db = auth_db();
+    $firstName = trim((string) ($payload['first_name'] ?? ''));
+    $lastName = trim((string) ($payload['last_name'] ?? ''));
+    $fullName = trim($firstName . ' ' . $lastName);
+    if ($fullName === '') {
+        $fullName = trim((string) ($payload['full_name'] ?? ''));
+    }
+
+    $phone = trim((string) ($payload['phone'] ?? ''));
+    $line1 = trim((string) ($payload['address_line1'] ?? ''));
+    $line2 = trim((string) ($payload['address_line2'] ?? ''));
+    $city = trim((string) ($payload['city'] ?? ''));
+    $state = trim((string) ($payload['state'] ?? ''));
+    $country = trim((string) ($payload['country'] ?? ''));
+    $postal = trim((string) ($payload['postal_code'] ?? ''));
+
+    $stmt = $db->prepare(
+        'UPDATE users
+         SET name = ?, full_name = ?, phone = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, country = ?, postal_code = ?
+         WHERE id = ?
+         LIMIT 1'
+    );
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('sssssssssi', $firstName, $fullName, $phone, $line1, $line2, $city, $state, $country, $postal, $userId);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
 }
 
 function auth_session_login(array $user, string $provider = 'local'): void
@@ -350,4 +406,3 @@ function auth_require_login(string $redirectAfter = ''): void
     header('Location: ' . $target);
     exit;
 }
-

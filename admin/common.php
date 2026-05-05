@@ -134,6 +134,13 @@ function ensure_admin_tables(mysqli $db): void
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB",
+        "CREATE TABLE IF NOT EXISTS site_content (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            content_key VARCHAR(120) NOT NULL UNIQUE,
+            content_value VARCHAR(255) NOT NULL DEFAULT '',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB",
     ];
 
     foreach ($queries as $query) {
@@ -213,42 +220,33 @@ function ensure_admin_tables(mysqli $db): void
         $parentIndexCheck->free();
     }
 
-    $defaultCategories = [
-        ['name' => 'General', 'slug' => 'general', 'parent_slug' => null],
-        ['name' => 'Men', 'slug' => 'men', 'parent_slug' => null],
-        ['name' => 'Women', 'slug' => 'women', 'parent_slug' => null],
-        ['name' => 'Kids', 'slug' => 'kids', 'parent_slug' => null],
-        ['name' => 'Accessories', 'slug' => 'accessories', 'parent_slug' => null],
-        ['name' => 'Sports', 'slug' => 'sports', 'parent_slug' => null],
-        ['name' => 'Electronics', 'slug' => 'electronics', 'parent_slug' => null],
-        ['name' => 'Home & Garden', 'slug' => 'home-garden', 'parent_slug' => null],
-        ['name' => 'Men Clothing', 'slug' => 'men-clothing', 'parent_slug' => 'men'],
-        ['name' => 'Men Shoes', 'slug' => 'men-shoes', 'parent_slug' => 'men'],
-        ['name' => 'Women Clothing', 'slug' => 'women-clothing', 'parent_slug' => 'women'],
-        ['name' => 'Women Shoes', 'slug' => 'women-shoes', 'parent_slug' => 'women'],
-    ];
+    $seedCategoriesCheck = $db->query('SELECT id FROM categories LIMIT 1');
+    if ($seedCategoriesCheck instanceof mysqli_result && $seedCategoriesCheck->num_rows === 0) {
+        $defaultCategories = [
+            ['name' => 'General', 'slug' => 'general', 'parent_slug' => null],
+            ['name' => 'Men', 'slug' => 'men', 'parent_slug' => null],
+            ['name' => 'Women', 'slug' => 'women', 'parent_slug' => null],
+            ['name' => 'Kids', 'slug' => 'kids', 'parent_slug' => null],
+            ['name' => 'Accessories', 'slug' => 'accessories', 'parent_slug' => null],
+            ['name' => 'Sports', 'slug' => 'sports', 'parent_slug' => null],
+            ['name' => 'Electronics', 'slug' => 'electronics', 'parent_slug' => null],
+            ['name' => 'Home & Garden', 'slug' => 'home-garden', 'parent_slug' => null],
+            ['name' => 'Men Clothing', 'slug' => 'men-clothing', 'parent_slug' => 'men'],
+            ['name' => 'Men Shoes', 'slug' => 'men-shoes', 'parent_slug' => 'men'],
+            ['name' => 'Women Clothing', 'slug' => 'women-clothing', 'parent_slug' => 'women'],
+            ['name' => 'Women Shoes', 'slug' => 'women-shoes', 'parent_slug' => 'women'],
+        ];
 
-    $slugToCategory = [];
-    $existingCategories = $db->query('SELECT id, slug, parent_id FROM categories');
-    if ($existingCategories instanceof mysqli_result) {
-        while ($row = $existingCategories->fetch_assoc()) {
-            $slugToCategory[(string) $row['slug']] = [
-                'id' => (int) ($row['id'] ?? 0),
-                'parent_id' => isset($row['parent_id']) ? (int) $row['parent_id'] : null,
-            ];
-        }
-        $existingCategories->free();
-    }
+        $slugToCategory = [];
 
-    foreach ($defaultCategories as $category) {
-        $slug = (string) $category['slug'];
-        $name = (string) $category['name'];
-        $parentSlug = $category['parent_slug'];
-        if ($parentSlug !== null) {
-            continue;
-        }
+        foreach ($defaultCategories as $category) {
+            $slug = (string) $category['slug'];
+            $name = (string) $category['name'];
+            $parentSlug = $category['parent_slug'];
+            if ($parentSlug !== null) {
+                continue;
+            }
 
-        if (!isset($slugToCategory[$slug])) {
             $isActive = 1;
             $stmt = $db->prepare('INSERT INTO categories (name, slug, parent_id, is_active) VALUES (?, ?, NULL, ?)');
             if ($stmt) {
@@ -261,47 +259,31 @@ function ensure_admin_tables(mysqli $db): void
                 }
             }
         }
-    }
 
-    foreach ($defaultCategories as $category) {
-        $slug = (string) $category['slug'];
-        $name = (string) $category['name'];
-        $parentSlug = $category['parent_slug'];
-        if ($parentSlug === null) {
-            continue;
-        }
+        foreach ($defaultCategories as $category) {
+            $slug = (string) $category['slug'];
+            $name = (string) $category['name'];
+            $parentSlug = $category['parent_slug'];
+            if ($parentSlug === null) {
+                continue;
+            }
 
-        $parentId = isset($slugToCategory[$parentSlug]) ? (int) $slugToCategory[$parentSlug]['id'] : 0;
-        if ($parentId <= 0) {
-            continue;
-        }
+            $parentId = isset($slugToCategory[$parentSlug]) ? (int) $slugToCategory[$parentSlug]['id'] : 0;
+            if ($parentId <= 0) {
+                continue;
+            }
 
-        if (!isset($slugToCategory[$slug])) {
             $isActive = 1;
             $stmt = $db->prepare('INSERT INTO categories (name, slug, parent_id, is_active) VALUES (?, ?, ?, ?)');
             if ($stmt) {
                 $stmt->bind_param('ssii', $name, $slug, $parentId, $isActive);
                 $stmt->execute();
-                $newId = (int) $stmt->insert_id;
                 $stmt->close();
-                if ($newId > 0) {
-                    $slugToCategory[$slug] = ['id' => $newId, 'parent_id' => $parentId];
-                }
-            }
-            continue;
-        }
-
-        $existingParentId = (int) ($slugToCategory[$slug]['parent_id'] ?? 0);
-        if ($existingParentId === 0) {
-            $stmt = $db->prepare('UPDATE categories SET parent_id = ? WHERE id = ?');
-            if ($stmt) {
-                $categoryId = (int) $slugToCategory[$slug]['id'];
-                $stmt->bind_param('ii', $parentId, $categoryId);
-                $stmt->execute();
-                $stmt->close();
-                $slugToCategory[$slug]['parent_id'] = $parentId;
             }
         }
+    }
+    if ($seedCategoriesCheck instanceof mysqli_result) {
+        $seedCategoriesCheck->free();
     }
 
     $seedHomeSections = $db->query('SELECT id FROM homepage_sections LIMIT 1');
@@ -316,6 +298,37 @@ function ensure_admin_tables(mysqli $db): void
     if ($seedHomeSections instanceof mysqli_result) {
         $seedHomeSections->free();
     }
+
+    $seedSiteContent = $db->query('SELECT id FROM site_content LIMIT 1');
+    if ($seedSiteContent instanceof mysqli_result && $seedSiteContent->num_rows === 0) {
+        $db->query("INSERT INTO site_content (content_key, content_value) VALUES
+            ('nav_pages_label', 'Pages'),
+            ('sidebar_all_categories_label', 'All Categories'),
+            ('sidebar_filter_title', 'Filter'),
+            ('home_products_heading', 'Products From Admin'),
+            ('new_arrivals_heading', 'New Arrivals'),
+            ('featured_heading', 'Featured'),
+            ('home_products_limit', '12'),
+            ('new_arrivals_limit', '8'),
+            ('featured_limit', '8'),
+            ('home_products_columns', '3'),
+            ('new_arrivals_columns', '4'),
+            ('featured_columns', '4')");
+    }
+    if ($seedSiteContent instanceof mysqli_result) {
+        $seedSiteContent->free();
+    }
+
+    $db->query("INSERT IGNORE INTO site_content (content_key, content_value) VALUES
+        ('home_products_heading', 'Products From Admin'),
+        ('new_arrivals_heading', 'New Arrivals'),
+        ('featured_heading', 'Featured'),
+        ('home_products_limit', '12'),
+        ('new_arrivals_limit', '8'),
+        ('featured_limit', '8'),
+        ('home_products_columns', '3'),
+        ('new_arrivals_columns', '4'),
+        ('featured_columns', '4')");
 
     $heroSeed = $db->query('SELECT id FROM hero_sections LIMIT 1');
     if ($heroSeed instanceof mysqli_result && $heroSeed->num_rows === 0) {

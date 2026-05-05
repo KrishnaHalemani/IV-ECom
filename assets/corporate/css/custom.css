@@ -1,4 +1,4 @@
-/* here you can put your own css to customize and override the theme */
+﻿/* here you can put your own css to customize and override the theme */
 
 body,
 h1,
@@ -18,3 +18,129 @@ textarea,
 button {
   font-family: Arial, sans-serif !important;
 }
+
+/* Global header alignment fixes (all pages) */
+@media (min-width: 992px) {
+  .pre-header .container .row {
+    display: flex;
+    align-items: center;
+  }
+
+  .pre-header .additional-shop-info,
+  .pre-header .additional-nav {
+    float: none;
+    width: auto;
+  }
+
+  .pre-header .additional-shop-info ul,
+  .pre-header .additional-nav ul {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    margin-bottom: 0;
+  }
+
+  .pre-header .additional-nav {
+    margin-left: auto;
+  }
+
+  .header .container {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+
+  .header .site-logo {
+    flex: 0 0 auto;
+    margin-right: 24px;
+  }
+
+  .header .header-navigation {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 18px;
+    overflow: hidden;
+  }
+
+  .header .header-navigation > ul {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    justify-content: flex-start;
+    white-space: nowrap;
+    overflow: hidden;
+    margin-bottom: 0;
+  }
+
+  .header .header-navigation > ul > li {
+    float: none !important;
+    display: inline-flex;
+    align-items: center;
+    margin-right: 12px;
+    margin-left: 0;
+    flex: 0 0 auto;
+  }
+
+  .header .header-navigation > ul > li > a {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .header .header-navigation > ul > li.menu-search {
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  .header .shop-user-menu,
+  .header .top-cart-block {
+    float: none;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .header .mobi-toggler {
+    display: none !important;
+  }
+
+  .header .shop-user-menu {
+    margin-left: 10px;
+  }
+
+  .header .shop-user-menu + .top-cart-block,
+  .header .top-cart-block + .shop-user-menu {
+    margin-left: 10px;
+  }
+}
+
+@media (max-width: 991px) {
+  .pre-header .additional-shop-info ul,
+  .pre-header .additional-nav ul {
+    white-space: normal;
+  }
+}
+
+.floating-whatsapp-btn {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+  z-index: 1200;
+}
+
+.floating-whatsapp-btn:hover,
+.floating-whatsapp-btn:focus {
+  color: #fff;
+  background: #128c7e;
+  text-decoration: none;
+}
+

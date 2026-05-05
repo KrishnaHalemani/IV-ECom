@@ -178,7 +178,7 @@ function display_section_flags(string $displaySection): array
 }
 
 $section = (string) ($_GET['section'] ?? 'products');
-$allowedSections = ['products', 'categories', 'users', 'orders', 'stock', 'coupons', 'hero', 'homepage_sections'];
+$allowedSections = ['products', 'categories', 'users', 'orders', 'stock', 'coupons', 'hero', 'homepage_sections', 'content_labels'];
 if (!in_array($section, $allowedSections, true)) {
     $section = 'products';
 }
@@ -251,6 +251,40 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                     $ok = $stmt->execute();
                     $stmt->close();
                     admin_flash_set($ok ? 'Category deleted.' : 'Could not delete category.', $ok ? 'success' : 'error');
+                }
+            }
+        } elseif ($action === 'bulk_delete_categories') {
+            $idsRaw = $_POST['category_ids'] ?? [];
+            $ids = [];
+            if (is_array($idsRaw)) {
+                foreach ($idsRaw as $rawId) {
+                    $id = (int) $rawId;
+                    if ($id > 0) {
+                        $ids[$id] = true;
+                    }
+                }
+            }
+            $ids = array_keys($ids);
+
+            if ($ids === []) {
+                admin_flash_set('Please select at least one category to delete.', 'error');
+            } else {
+                $stmt = $db->prepare('DELETE FROM categories WHERE id = ?');
+                $deletedCount = 0;
+                if ($stmt) {
+                    foreach ($ids as $id) {
+                        $stmt->bind_param('i', $id);
+                        if ($stmt->execute() && $stmt->affected_rows > 0) {
+                            $deletedCount++;
+                        }
+                    }
+                    $stmt->close();
+                }
+
+                if ($deletedCount > 0) {
+                    admin_flash_set($deletedCount . ' categor' . ($deletedCount === 1 ? 'y deleted.' : 'ies deleted.'), 'success');
+                } else {
+                    admin_flash_set('No selected categories were deleted.', 'error');
                 }
             }
         }
@@ -631,6 +665,75 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         }
         admin_redirect('controls.php', ['section' => 'homepage_sections']);
     }
+
+    if ($section === 'content_labels') {
+        if ($action === 'save_content_labels_simple') {
+            $simpleKeys = [
+                'home_products_heading',
+                'home_products_limit',
+                'home_products_columns',
+                'new_arrivals_heading',
+                'new_arrivals_limit',
+                'new_arrivals_columns',
+                'featured_heading',
+                'featured_limit',
+                'featured_columns',
+                'nav_pages_label',
+                'sidebar_all_categories_label',
+                'sidebar_filter_title',
+            ];
+            $stmt = $db->prepare('INSERT INTO site_content (content_key, content_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE content_value = VALUES(content_value)');
+            if ($stmt) {
+                foreach ($simpleKeys as $key) {
+                    $value = trim((string) ($_POST[$key] ?? ''));
+                    $stmt->bind_param('ss', $key, $value);
+                    $stmt->execute();
+                }
+                $stmt->close();
+                admin_flash_set('Homepage settings saved.', 'success');
+            } else {
+                admin_flash_set('Could not save homepage settings.', 'error');
+            }
+        } elseif ($action === 'create_content_label') {
+            $key = trim((string) ($_POST['content_key'] ?? ''));
+            $value = trim((string) ($_POST['content_value'] ?? ''));
+            if ($key === '') {
+                admin_flash_set('Content key is required.', 'error');
+            } else {
+                $stmt = $db->prepare('INSERT INTO site_content (content_key, content_value) VALUES (?, ?)');
+                if ($stmt) {
+                    $stmt->bind_param('ss', $key, $value);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Label added.' : 'Could not add label (key may already exist).', $ok ? 'success' : 'error');
+                }
+            }
+        } elseif ($action === 'update_content_label') {
+            $key = trim((string) ($_POST['content_key'] ?? ''));
+            $value = trim((string) ($_POST['content_value'] ?? ''));
+            if ($key !== '') {
+                $stmt = $db->prepare('INSERT INTO site_content (content_key, content_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE content_value = VALUES(content_value)');
+                if ($stmt) {
+                    $stmt->bind_param('ss', $key, $value);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Label updated.' : 'Could not update label.', $ok ? 'success' : 'error');
+                }
+            }
+        } elseif ($action === 'delete_content_label') {
+            $id = (int) ($_POST['id'] ?? 0);
+            if ($id > 0) {
+                $stmt = $db->prepare('DELETE FROM site_content WHERE id = ?');
+                if ($stmt) {
+                    $stmt->bind_param('i', $id);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    admin_flash_set($ok ? 'Label deleted.' : 'Could not delete label.', $ok ? 'success' : 'error');
+                }
+            }
+        }
+        admin_redirect('controls.php', ['section' => 'content_labels']);
+    }
 }
 
 $flash = admin_flash_get();
@@ -667,6 +770,40 @@ $heroSourceProducts = $db->query(
      ORDER BY name ASC, id DESC"
 );
 $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_order, created_at FROM homepage_sections ORDER BY display_order ASC, id ASC');
+$contentLabels = $db->query('SELECT id, content_key, content_value, updated_at FROM site_content ORDER BY content_key ASC');
+$contentLabelMap = [];
+$contentLabelMapResult = $db->query('SELECT content_key, content_value FROM site_content');
+if ($contentLabelMapResult instanceof mysqli_result) {
+    while ($contentRow = $contentLabelMapResult->fetch_assoc()) {
+        $mapKey = trim((string) ($contentRow['content_key'] ?? ''));
+        if ($mapKey === '') {
+            continue;
+        }
+        $contentLabelMap[$mapKey] = trim((string) ($contentRow['content_value'] ?? ''));
+    }
+    $contentLabelMapResult->free();
+}
+$homeSectionLabel = $contentLabelMap['home_products_heading'] ?? 'Home';
+$newArrivalsSectionLabel = $contentLabelMap['new_arrivals_heading'] ?? 'New Arrivals';
+$featuredSectionLabel = $contentLabelMap['featured_heading'] ?? 'Featured';
+if ($homeSectionLabel === '') {
+    $homeSectionLabel = 'Home';
+}
+if ($newArrivalsSectionLabel === '') {
+    $newArrivalsSectionLabel = 'New Arrivals';
+}
+if ($featuredSectionLabel === '') {
+    $featuredSectionLabel = 'Featured';
+}
+$homeProductsLimitLabel = $contentLabelMap['home_products_limit'] ?? '12';
+$homeProductsColumnsLabel = $contentLabelMap['home_products_columns'] ?? '3';
+$newArrivalsLimitLabel = $contentLabelMap['new_arrivals_limit'] ?? '8';
+$newArrivalsColumnsLabel = $contentLabelMap['new_arrivals_columns'] ?? '4';
+$featuredLimitLabel = $contentLabelMap['featured_limit'] ?? '8';
+$featuredColumnsLabel = $contentLabelMap['featured_columns'] ?? '4';
+$navPagesLabel = $contentLabelMap['nav_pages_label'] ?? 'Pages';
+$sidebarAllCategoriesLabel = $contentLabelMap['sidebar_all_categories_label'] ?? 'All Categories';
+$sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
 ?>
 <!doctype html>
 <html lang="en">
@@ -698,8 +835,10 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
     .btn-muted { background: #666; color: #fff; }
     .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
     .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .mt { margin-top: 10px; }
-    @media (max-width: 900px) { .grid-4, .grid-3 { grid-template-columns: 1fr; } }
+    details.advanced summary { cursor: pointer; font-weight: 600; }
+    @media (max-width: 900px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -720,6 +859,7 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
       <a class="<?php echo $section === 'coupons' ? 'active' : ''; ?>" href="controls.php?section=coupons">Offers/Coupons</a>
       <a class="<?php echo $section === 'hero' ? 'active' : ''; ?>" href="controls.php?section=hero">Hero Management</a>
       <a class="<?php echo $section === 'homepage_sections' ? 'active' : ''; ?>" href="controls.php?section=homepage_sections">Homepage Sections</a>
+      <a class="<?php echo $section === 'content_labels' ? 'active' : ''; ?>" href="controls.php?section=content_labels">Content Labels</a>
     </div>
 
     <?php if ($flash): ?>
@@ -747,13 +887,22 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
             <div><button class="btn btn-primary" type="submit">Add Category</button></div>
           </div>
         </form>
+        <form id="bulkDeleteCategoriesForm" method="post" action="controls.php?section=categories" class="mt">
+          <input type="hidden" name="action" value="bulk_delete_categories">
+          <div class="mt">
+            <button class="btn btn-danger" type="submit">Delete Selected</button>
+          </div>
+        </form>
         <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Parent</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Select</th><th>ID</th><th>Name</th><th>Slug</th><th>Parent</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
           <tbody>
             <?php if ($categoriesData === []): ?>
-              <tr><td colspan="7">No categories found.</td></tr>
+              <tr><td colspan="8">No categories found.</td></tr>
             <?php else: foreach ($categoriesData as $row): ?>
               <tr>
+                <td>
+                  <input type="checkbox" class="js-category-select" value="<?php echo (int) $row['id']; ?>">
+                </td>
                 <td><?php echo (int) $row['id']; ?></td>
                 <td colspan="5">
                   <form method="post" action="controls.php?section=categories">
@@ -792,6 +941,41 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
           </tbody>
         </table>
       </div>
+      <script>
+        (function () {
+          var form = document.getElementById('bulkDeleteCategoriesForm');
+          if (!form) {
+            return;
+          }
+
+          form.addEventListener('submit', function (event) {
+            var checked = document.querySelectorAll('.js-category-select:checked');
+            if (!checked.length) {
+              event.preventDefault();
+              alert('Please select at least one category.');
+              return;
+            }
+
+            var ok = confirm('Delete ' + checked.length + ' selected categories?');
+            if (!ok) {
+              event.preventDefault();
+              return;
+            }
+
+            form.querySelectorAll('input[name="category_ids[]"]').forEach(function (node) {
+              node.remove();
+            });
+
+            checked.forEach(function (box) {
+              var hidden = document.createElement('input');
+              hidden.type = 'hidden';
+              hidden.name = 'category_ids[]';
+              hidden.value = box.value;
+              form.appendChild(hidden);
+            });
+          });
+        })();
+      </script>
     <?php endif; ?>
 
     <?php if ($section === 'products'): ?>
@@ -813,12 +997,12 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
             <div><input type="number" step="0.01" name="price" placeholder="Price" required></div>
             <div><input type="number" name="stock_qty" placeholder="Stock" value="0" required></div>
             <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
-            <div><label><input type="checkbox" name="is_active" checked> Active</label></div>
+            <div><label><input type="checkbox" name="is_active" checked aria-label="Active"></label></div>
             <div>
               <select name="display_section">
-                <option value="home">Home</option>
-                <option value="new_arrivals">New Arrivals</option>
-                <option value="featured">Featured</option>
+                <option value="home"><?php echo admin_h($homeSectionLabel); ?></option>
+                <option value="new_arrivals"><?php echo admin_h($newArrivalsSectionLabel); ?></option>
+                <option value="featured"><?php echo admin_h($featuredSectionLabel); ?></option>
                 <option value="none">None</option>
               </select>
             </div>
@@ -855,7 +1039,7 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
                       <div><input type="number" step="0.01" name="price" value="<?php echo admin_h((string) $row['price']); ?>" required></div>
                       <div><input type="number" name="stock_qty" value="<?php echo (int) $row['stock_qty']; ?>" required></div>
                       <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
-                      <div><label><input type="checkbox" name="is_active" <?php echo (int) $row['is_active'] === 1 ? 'checked' : ''; ?>> Active</label></div>
+                      <div><label><input type="checkbox" name="is_active" <?php echo (int) $row['is_active'] === 1 ? 'checked' : ''; ?> aria-label="Active"></label></div>
                       <div>
                         <select name="display_section">
                           <?php
@@ -868,9 +1052,9 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
                               }
                           }
                           ?>
-                          <option value="home" <?php echo $displaySectionValue === 'home' ? 'selected' : ''; ?>>Home</option>
-                          <option value="new_arrivals" <?php echo $displaySectionValue === 'new_arrivals' ? 'selected' : ''; ?>>New Arrivals</option>
-                          <option value="featured" <?php echo $displaySectionValue === 'featured' ? 'selected' : ''; ?>>Featured</option>
+                          <option value="home" <?php echo $displaySectionValue === 'home' ? 'selected' : ''; ?>><?php echo admin_h($homeSectionLabel); ?></option>
+                          <option value="new_arrivals" <?php echo $displaySectionValue === 'new_arrivals' ? 'selected' : ''; ?>><?php echo admin_h($newArrivalsSectionLabel); ?></option>
+                          <option value="featured" <?php echo $displaySectionValue === 'featured' ? 'selected' : ''; ?>><?php echo admin_h($featuredSectionLabel); ?></option>
                           <option value="none" <?php echo $displaySectionValue === 'none' ? 'selected' : ''; ?>>None</option>
                         </select>
                       </div>
@@ -1230,6 +1414,74 @@ $homepageSections = $db->query('SELECT id, section_name, is_enabled, display_ord
             <?php endwhile; endif; ?>
           </tbody>
         </table>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($section === 'content_labels'): ?>
+      <div class="panel">
+        <h3>Homepage Settings</h3>
+        <p>Edit homepage headings, counts, layout and header labels using simple fields.</p>
+        <form method="post" action="controls.php?section=content_labels">
+          <input type="hidden" name="action" value="save_content_labels_simple">
+          <div class="grid-2">
+            <div><label>Home Section Heading</label><input type="text" name="home_products_heading" value="<?php echo admin_h($homeSectionLabel); ?>"></div>
+            <div><label>Home Items Count</label><input type="number" min="1" max="48" name="home_products_limit" value="<?php echo admin_h($homeProductsLimitLabel); ?>"></div>
+            <div><label>Home Columns (1-4)</label><input type="number" min="1" max="4" name="home_products_columns" value="<?php echo admin_h($homeProductsColumnsLabel); ?>"></div>
+            <div><label>New Arrivals Heading</label><input type="text" name="new_arrivals_heading" value="<?php echo admin_h($newArrivalsSectionLabel); ?>"></div>
+            <div><label>New Arrivals Items Count</label><input type="number" min="1" max="48" name="new_arrivals_limit" value="<?php echo admin_h($newArrivalsLimitLabel); ?>"></div>
+            <div><label>New Arrivals Columns (1-4)</label><input type="number" min="1" max="4" name="new_arrivals_columns" value="<?php echo admin_h($newArrivalsColumnsLabel); ?>"></div>
+            <div><label>Featured Heading</label><input type="text" name="featured_heading" value="<?php echo admin_h($featuredSectionLabel); ?>"></div>
+            <div><label>Featured Items Count</label><input type="number" min="1" max="48" name="featured_limit" value="<?php echo admin_h($featuredLimitLabel); ?>"></div>
+            <div><label>Featured Columns (1-4)</label><input type="number" min="1" max="4" name="featured_columns" value="<?php echo admin_h($featuredColumnsLabel); ?>"></div>
+            <div><label>Top Menu Label</label><input type="text" name="nav_pages_label" value="<?php echo admin_h($navPagesLabel); ?>"></div>
+            <div><label>Sidebar 'All Categories' Label</label><input type="text" name="sidebar_all_categories_label" value="<?php echo admin_h($sidebarAllCategoriesLabel); ?>"></div>
+            <div><label>Sidebar Filter Heading</label><input type="text" name="sidebar_filter_title" value="<?php echo admin_h($sidebarFilterTitleLabel); ?>"></div>
+          </div>
+          <div class="mt"><button class="btn btn-primary" type="submit">Save Homepage Settings</button></div>
+        </form>
+        <details class="advanced mt">
+          <summary>Advanced: Manage Raw Keys</summary>
+          <div class="mt">
+            <form method="post" action="controls.php?section=content_labels">
+              <input type="hidden" name="action" value="create_content_label">
+              <div class="grid-4">
+                <div><input type="text" name="content_key" placeholder="content_key (e.g. home_banner_text)" required></div>
+                <div><input type="text" name="content_value" placeholder="Label text/value"></div>
+                <div><button class="btn btn-primary" type="submit">Add Label</button></div>
+              </div>
+            </form>
+            <table>
+              <thead><tr><th>Key</th><th>Label Text</th><th>Last Updated</th><th>Action</th></tr></thead>
+              <tbody>
+                <?php if (!$contentLabels || $contentLabels->num_rows === 0): ?>
+                  <tr><td colspan="4">No content labels found.</td></tr>
+                <?php else: while ($row = $contentLabels->fetch_assoc()): ?>
+                  <tr>
+                    <td><code><?php echo admin_h((string) $row['content_key']); ?></code></td>
+                    <td>
+                      <form method="post" action="controls.php?section=content_labels">
+                        <input type="hidden" name="action" value="update_content_label">
+                        <input type="hidden" name="content_key" value="<?php echo admin_h((string) $row['content_key']); ?>">
+                        <div class="grid-4">
+                          <div><input type="text" name="content_value" value="<?php echo admin_h((string) $row['content_value']); ?>" required></div>
+                          <div><button class="btn btn-primary" type="submit">Save</button></div>
+                        </div>
+                      </form>
+                    </td>
+                    <td><small><?php echo admin_h((string) $row['updated_at']); ?></small></td>
+                    <td>
+                      <form class="inline" method="post" action="controls.php?section=content_labels" onsubmit="return confirm('Delete this content label?');">
+                        <input type="hidden" name="action" value="delete_content_label">
+                        <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
+                        <button class="btn btn-danger" type="submit">Delete</button>
+                      </form>
+                    </td>
+                  </tr>
+                <?php endwhile; endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </details>
       </div>
     <?php endif; ?>
   </div>
