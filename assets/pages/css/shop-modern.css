@@ -1,12 +1,12 @@
 :root {
-  --shop-primary: #f36f21;
-  --shop-primary-dark: #d85f16;
-  --shop-bg: #f6f7f9;
-  --shop-text: #2f3742;
-  --shop-muted: #7a8596;
-  --shop-border: #e8ebf0;
-  --shop-shadow-sm: 0 8px 24px rgba(34, 41, 51, 0.08);
-  --shop-shadow-md: 0 14px 36px rgba(34, 41, 51, 0.14);
+  --shop-primary: #556b2f;
+  --shop-primary-dark: #3f5123;
+  --shop-bg: #f1f5ed;
+  --shop-text: #222a31;
+  --shop-muted: #5e6d78;
+  --shop-border: #dce4d5;
+  --shop-shadow-sm: 0 8px 24px rgba(28, 39, 22, 0.1);
+  --shop-shadow-md: 0 14px 36px rgba(28, 39, 22, 0.18);
   --shop-radius: 12px;
   --shop-radius-sm: 8px;
   --shop-space-1: 8px;

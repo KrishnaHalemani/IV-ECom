@@ -211,6 +211,14 @@ function ensure_admin_tables(mysqli $db): void
         $colorImageMapCheck->free();
     }
 
+    $comparePriceCheck = $db->query("SHOW COLUMNS FROM products LIKE 'compare_price'");
+    if ($comparePriceCheck instanceof mysqli_result && $comparePriceCheck->num_rows === 0) {
+        $db->query("ALTER TABLE products ADD COLUMN compare_price DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER price");
+    }
+    if ($comparePriceCheck instanceof mysqli_result) {
+        $comparePriceCheck->free();
+    }
+
     $userGoogleIdCheck = $db->query("SHOW COLUMNS FROM users LIKE 'google_id'");
     if ($userGoogleIdCheck instanceof mysqli_result && $userGoogleIdCheck->num_rows === 0) {
         $db->query("ALTER TABLE users ADD COLUMN google_id VARCHAR(191) NULL AFTER email");

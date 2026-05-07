@@ -36,6 +36,9 @@ function cartRespond(array $payload, int $statusCode = 200): void
 $action = strtolower((string) ($_REQUEST['action'] ?? 'summary'));
 $productId = (int) ($_REQUEST['product_id'] ?? 0);
 $quantity = (int) ($_REQUEST['qty'] ?? 1);
+$itemKey = trim((string) ($_REQUEST['item_key'] ?? ''));
+$color = trim((string) ($_REQUEST['color'] ?? ''));
+$size = trim((string) ($_REQUEST['size'] ?? ''));
 
 $response = [
     'success' => true,
@@ -44,15 +47,15 @@ $response = [
 
 switch ($action) {
     case 'add':
-        $response = addToCart($productId, $quantity);
+        $response = addToCart($productId, $quantity, $color, $size);
         break;
 
     case 'remove':
-        $response = removeFromCart($productId);
+        $response = removeFromCart($productId, $itemKey, $color, $size);
         break;
 
     case 'update':
-        $response = updateCartItem($productId, $quantity);
+        $response = updateCartItem($productId, $quantity, $itemKey, $color, $size);
         break;
 
     case 'clear':

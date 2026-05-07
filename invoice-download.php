@@ -94,8 +94,8 @@ if ($invoiceNo === '') {
 }
 
 $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
-$pdf->SetCreator('Metronic Shop');
-$pdf->SetAuthor('Metronic Shop');
+$pdf->SetCreator('BattleRock');
+$pdf->SetAuthor('BattleRock');
 $pdf->SetTitle('Invoice ' . $invoiceNo);
 $pdf->SetSubject('Order Invoice');
 $pdf->setPrintHeader(false);
@@ -103,17 +103,30 @@ $pdf->setPrintFooter(false);
 $pdf->SetMargins(12, 12, 12);
 $pdf->SetAutoPageBreak(true, 12);
 $pdf->AddPage();
+$pdf->SetFont('dejavusans', '', 11);
+
+$logoPath = __DIR__ . '/assets/corporate/img/logos/BattleRockLogo.jpeg';
+$logoHtml = '';
+if (is_file($logoPath)) {
+    $logoHtml = '<img src="' . $logoPath . '" style="width:52px; height:52px;" alt="BattleRock logo" />';
+}
 
 $statusLabel = ucfirst((string) ($order['status'] ?? 'pending'));
 $createdAt = (string) ($order['created_at'] ?? '');
 $totalAmount = (float) ($order['total_amount'] ?? 0);
 
-$html = '<h1 style="font-size:20px;">INVOICE</h1>';
-$html .= '<table cellpadding="4" cellspacing="0" border="0">';
-$html .= '<tr><td width="60%"><strong>Metronic Shop</strong><br/>Thank you for your order.</td>';
+$html = '<table cellpadding="2" cellspacing="0" border="0">';
+$html .= '<tr>';
+$html .= '<td width="60%">';
+$html .= '<table cellpadding="0" cellspacing="0" border="0"><tr>';
+$html .= '<td width="16%">' . $logoHtml . '</td>';
+$html .= '<td width="84%"><h1 style="font-size:28px; margin:0;">INVOICE</h1><strong>BattleRock</strong><br/>Thank you for your order.</td>';
+$html .= '</tr></table>';
+$html .= '</td>';
 $html .= '<td width="40%" align="right"><strong>Invoice #:</strong> ' . auth_h($invoiceNo) . '<br/>';
 $html .= '<strong>Date:</strong> ' . auth_h($createdAt) . '<br/>';
-$html .= '<strong>Status:</strong> ' . auth_h($statusLabel) . '</td></tr>';
+$html .= '<strong>Status:</strong> ' . auth_h($statusLabel) . '</td>';
+$html .= '</tr>';
 $html .= '</table><br/>';
 
 $html .= '<table cellpadding="4" cellspacing="0" border="0">';
@@ -132,8 +145,8 @@ foreach ($items as $item) {
     $html .= '<tr>';
     $html .= '<td>' . auth_h((string) $item['name']) . '</td>';
     $html .= '<td align="right">' . $qty . '</td>';
-    $html .= '<td align="right">&#8377; ' . number_format($price, 2) . '</td>';
-    $html .= '<td align="right">&#8377; ' . number_format($lineTotal, 2) . '</td>';
+    $html .= '<td align="right">₹ ' . number_format($price, 2) . '</td>';
+    $html .= '<td align="right">₹ ' . number_format($lineTotal, 2) . '</td>';
     $html .= '</tr>';
 }
 
@@ -142,7 +155,7 @@ if ($items === []) {
 }
 
 $displayTotal = $totalAmount > 0 ? $totalAmount : $computedTotal;
-$html .= '<tr><td colspan="3" align="right"><strong>Grand Total</strong></td><td align="right"><strong>&#8377; ' . number_format($displayTotal, 2) . '</strong></td></tr>';
+$html .= '<tr><td colspan="3" align="right"><strong>Grand Total</strong></td><td align="right"><strong>₹ ' . number_format($displayTotal, 2) . '</strong></td></tr>';
 $html .= '</tbody></table>';
 
 $pdf->writeHTML($html, true, false, true, false, '');

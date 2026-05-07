@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth-functions.php';
+require_once __DIR__ . '/mail/order-mailer.php';
 
 function cartStartSession(): void
 {
@@ -11,6 +12,36 @@ function cartStartSession(): void
 function cartNormalizeQuantity(int $quantity): int
 {
     return $quantity < 0 ? 0 : $quantity;
+}
+
+function cartNormalizeVariantValue(?string $value): string
+{
+    $value = trim((string) $value);
+    if ($value === '') {
+        return '';
+    }
+    return mb_strtolower($value);
+}
+
+function cartBuildItemKey(int $productId, string $color = '', string $size = ''): string
+{
+    $pid = max(0, $productId);
+    $c = cartNormalizeVariantValue($color);
+    $s = cartNormalizeVariantValue($size);
+    return $pid . '||' . $c . '||' . $s;
+}
+
+function cartParseItemKey(string $itemKey): array
+{
+    $parts = explode('||', (string) $itemKey);
+    $productId = (int) ($parts[0] ?? 0);
+    $color = (string) ($parts[1] ?? '');
+    $size = (string) ($parts[2] ?? '');
+    return [
+        'product_id' => $productId,
+        'color' => $color,
+        'size' => $size,
+    ];
 }
 
 function cart_ensure_schema(mysqli $db): void
@@ -28,9 +59,12 @@ function cart_ensure_schema(mysqli $db): void
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id INT UNSIGNED NOT NULL,
             product_id INT UNSIGNED NOT NULL,
+            color VARCHAR(60) NOT NULL DEFAULT '',
+            size VARCHAR(40) NOT NULL DEFAULT '',
+            variant_key VARCHAR(220) NOT NULL DEFAULT '',
             quantity INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uniq_user_product (user_id, product_id),
+            UNIQUE KEY uniq_user_variant (user_id, variant_key),
             KEY idx_cart_user (user_id),
             KEY idx_cart_product (product_id),
             CONSTRAINT fk_cart_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -61,6 +95,26 @@ function cart_ensure_schema(mysqli $db): void
             usage_limit INT NULL,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB"
+    );
+
+    $db->query(
+        "CREATE TABLE IF NOT EXISTS user_saved_addresses (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            full_name VARCHAR(160) NOT NULL DEFAULT '',
+            phone VARCHAR(50) NOT NULL DEFAULT '',
+            address_line1 VARCHAR(255) NOT NULL DEFAULT '',
+            address_line2 VARCHAR(255) NOT NULL DEFAULT '',
+            city VARCHAR(120) NOT NULL DEFAULT '',
+            state VARCHAR(120) NOT NULL DEFAULT '',
+            postal_code VARCHAR(30) NOT NULL DEFAULT '',
+            country VARCHAR(120) NOT NULL DEFAULT '',
+            is_default TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_saved_address_user (user_id),
+            CONSTRAINT fk_saved_address_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB"
     );
 
@@ -110,6 +164,60 @@ function cart_ensure_schema(mysqli $db): void
     }
     if (!auth_has_column($db, 'orders', 'discount_amount')) {
         $db->query("ALTER TABLE orders ADD COLUMN discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_amount");
+    }
+    if (!auth_has_column($db, 'orders', 'payment_method')) {
+        $db->query("ALTER TABLE orders ADD COLUMN payment_method VARCHAR(30) NOT NULL DEFAULT 'cod' AFTER status");
+    }
+    if (!auth_has_column($db, 'orders', 'shipping_name')) {
+        $db->query("ALTER TABLE orders ADD COLUMN shipping_name VARCHAR(160) DEFAULT '' AFTER customer_email");
+    }
+    if (!auth_has_column($db, 'orders', 'shipping_phone')) {
+        $db->query("ALTER TABLE orders ADD COLUMN shipping_phone VARCHAR(50) DEFAULT '' AFTER shipping_name");
+    }
+    if (!auth_has_column($db, 'orders', 'shipping_address_line1')) {
+        $db->query("ALTER TABLE orders ADD COLUMN shipping_address_line1 VARCHAR(255) DEFAULT '' AFTER shipping_phone");
+    }
+    if (!auth_has_column($db, 'orders', 'shipping_address_line2')) {
+        $db->query("ALTER TABLE orders ADD COLUMN shipping_address_line2 VARCHAR(255) DEFAULT '' AFTER shipping_address_line1");
+    }
+    if (!auth_has_column($db, 'orders', 'shipping_city')) {
+        $db->query("ALTER TABLE orders ADD COLUMN shipping_city VARCHAR(120) DEFAULT '' AFTER shipping_address_line2");
+    }
+    if (!auth_has_column($db, 'orders', 'shipping_state')) {
+        $db->query("ALTER TABLE orders ADD COLUMN shipping_state VARCHAR(120) DEFAULT '' AFTER shipping_city");
+    }
+    if (!auth_has_column($db, 'orders', 'shipping_country')) {
+        $db->query("ALTER TABLE orders ADD COLUMN shipping_country VARCHAR(120) DEFAULT '' AFTER shipping_state");
+    }
+    if (!auth_has_column($db, 'orders', 'shipping_postal_code')) {
+        $db->query("ALTER TABLE orders ADD COLUMN shipping_postal_code VARCHAR(30) DEFAULT '' AFTER shipping_country");
+    }
+    if (!auth_has_column($db, 'orders', 'estimated_delivery_date')) {
+        $db->query("ALTER TABLE orders ADD COLUMN estimated_delivery_date DATE NULL AFTER shipping_postal_code");
+    }
+    if (!auth_has_column($db, 'cart', 'color')) {
+        $db->query("ALTER TABLE cart ADD COLUMN color VARCHAR(60) NOT NULL DEFAULT '' AFTER product_id");
+    }
+    if (!auth_has_column($db, 'cart', 'size')) {
+        $db->query("ALTER TABLE cart ADD COLUMN size VARCHAR(40) NOT NULL DEFAULT '' AFTER color");
+    }
+    if (!auth_has_column($db, 'cart', 'variant_key')) {
+        $db->query("ALTER TABLE cart ADD COLUMN variant_key VARCHAR(220) NOT NULL DEFAULT '' AFTER size");
+    }
+    $db->query("UPDATE cart SET variant_key = CONCAT(product_id, '||', LOWER(TRIM(COALESCE(color,''))), '||', LOWER(TRIM(COALESCE(size,'')))) WHERE variant_key = '' OR variant_key IS NULL");
+    $oldUnique = $db->query("SHOW INDEX FROM cart WHERE Key_name = 'uniq_user_product'");
+    if ($oldUnique instanceof mysqli_result && $oldUnique->num_rows > 0) {
+        $db->query("ALTER TABLE cart DROP INDEX uniq_user_product");
+    }
+    if ($oldUnique instanceof mysqli_result) {
+        $oldUnique->free();
+    }
+    $newUnique = $db->query("SHOW INDEX FROM cart WHERE Key_name = 'uniq_user_variant'");
+    if ($newUnique instanceof mysqli_result && $newUnique->num_rows === 0) {
+        $db->query("ALTER TABLE cart ADD UNIQUE KEY uniq_user_variant (user_id, variant_key)");
+    }
+    if ($newUnique instanceof mysqli_result) {
+        $newUnique->free();
     }
 
     $statusColumn = $db->query("SHOW COLUMNS FROM orders LIKE 'status'");
@@ -299,10 +407,17 @@ function cartGetSessionStore(): array
 
     $normalized = [];
     foreach ($cart as $key => $qty) {
-        $id = (int) $key;
         $quantity = cartNormalizeQuantity((int) $qty);
-        if ($id > 0 && $quantity > 0) {
-            $normalized[$id] = $quantity;
+        $itemKey = trim((string) $key);
+        if ($itemKey === '') {
+            continue;
+        }
+        if (ctype_digit($itemKey)) {
+            $itemKey = cartBuildItemKey((int) $itemKey, '', '');
+        }
+        $parsed = cartParseItemKey($itemKey);
+        if ((int) $parsed['product_id'] > 0 && $quantity > 0) {
+            $normalized[$itemKey] = $quantity;
         }
     }
 
@@ -323,7 +438,7 @@ function cartGetDbStore(int $userId): array
     }
 
     $db = cart_db();
-    $stmt = $db->prepare('SELECT product_id, quantity FROM cart WHERE user_id = ?');
+    $stmt = $db->prepare('SELECT product_id, color, size, variant_key, quantity FROM cart WHERE user_id = ?');
     if (!$stmt) {
         return [];
     }
@@ -335,9 +450,17 @@ function cartGetDbStore(int $userId): array
     if ($result instanceof mysqli_result) {
         while ($row = $result->fetch_assoc()) {
             $productId = (int) ($row['product_id'] ?? 0);
+            $variantKey = trim((string) ($row['variant_key'] ?? ''));
+            if ($variantKey === '') {
+                $variantKey = cartBuildItemKey(
+                    $productId,
+                    (string) ($row['color'] ?? ''),
+                    (string) ($row['size'] ?? '')
+                );
+            }
             $qty = cartNormalizeQuantity((int) ($row['quantity'] ?? 0));
-            if ($productId > 0 && $qty > 0) {
-                $items[$productId] = $qty;
+            if ($productId > 0 && $qty > 0 && $variantKey !== '') {
+                $items[$variantKey] = $qty;
             }
         }
         $result->free();
@@ -362,15 +485,19 @@ function cartSetDbStore(int $userId, array $cart): void
             $deleteStmt->close();
         }
 
-        $insertStmt = $db->prepare('INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)');
+        $insertStmt = $db->prepare('INSERT INTO cart (user_id, product_id, color, size, variant_key, quantity) VALUES (?, ?, ?, ?, ?, ?)');
         if ($insertStmt) {
-            foreach ($cart as $productId => $quantity) {
-                $pid = (int) $productId;
+            foreach ($cart as $itemKey => $quantity) {
+                $parsed = cartParseItemKey((string) $itemKey);
+                $pid = (int) ($parsed['product_id'] ?? 0);
+                $color = cartNormalizeVariantValue((string) ($parsed['color'] ?? ''));
+                $size = cartNormalizeVariantValue((string) ($parsed['size'] ?? ''));
+                $variantKey = cartBuildItemKey($pid, $color, $size);
                 $qty = cartNormalizeQuantity((int) $quantity);
                 if ($pid <= 0 || $qty <= 0) {
                     continue;
                 }
-                $insertStmt->bind_param('iii', $userId, $pid, $qty);
+                $insertStmt->bind_param('iisssi', $userId, $pid, $color, $size, $variantKey, $qty);
                 $insertStmt->execute();
             }
             $insertStmt->close();
@@ -412,8 +539,11 @@ function cartMergeSessionIntoUserCart(int $userId): void
     }
 
     $userCart = cartGetDbStore($userId);
-    foreach ($guestCart as $productId => $qty) {
-        $product = cartGetProductById((int) $productId);
+    foreach ($guestCart as $itemKey => $qty) {
+        $parsed = cartParseItemKey((string) $itemKey);
+        $productId = (int) ($parsed['product_id'] ?? 0);
+        $variantKey = cartBuildItemKey($productId, (string) ($parsed['color'] ?? ''), (string) ($parsed['size'] ?? ''));
+        $product = cartGetProductById($productId);
         if (!is_array($product)) {
             continue;
         }
@@ -421,8 +551,8 @@ function cartMergeSessionIntoUserCart(int $userId): void
         if ($stock <= 0) {
             continue;
         }
-        $existing = (int) ($userCart[(int) $productId] ?? 0);
-        $userCart[(int) $productId] = min($stock, $existing + (int) $qty);
+        $existing = (int) ($userCart[$variantKey] ?? 0);
+        $userCart[$variantKey] = min($stock, $existing + (int) $qty);
     }
 
     cartSetDbStore($userId, $userCart);
@@ -465,7 +595,7 @@ function cartGetProductById(int $productId): ?array
     return $row ?: null;
 }
 
-function addToCart(int $productId, int $quantity = 1): array
+function addToCart(int $productId, int $quantity = 1, string $color = '', string $size = ''): array
 {
     if ($quantity <= 0) {
         $quantity = 1;
@@ -481,29 +611,33 @@ function addToCart(int $productId, int $quantity = 1): array
         return ['success' => false, 'message' => 'Product is out of stock.'];
     }
 
+    $itemKey = cartBuildItemKey($productId, $color, $size);
     $cart = cartGetStore();
-    $current = (int) ($cart[$productId] ?? 0);
+    $current = (int) ($cart[$itemKey] ?? 0);
     $next = min($stock, $current + $quantity);
 
     if ($next <= 0) {
-        unset($cart[$productId]);
+        unset($cart[$itemKey]);
     } else {
-        $cart[$productId] = $next;
+        $cart[$itemKey] = $next;
     }
 
     cartSetStore($cart);
     return ['success' => true, 'message' => 'Product added to cart.'];
 }
 
-function removeFromCart(int $productId): array
+function removeFromCart(int $productId, string $itemKey = '', string $color = '', string $size = ''): array
 {
     $cart = cartGetStore();
-    unset($cart[$productId]);
+    if (trim($itemKey) === '') {
+        $itemKey = cartBuildItemKey($productId, $color, $size);
+    }
+    unset($cart[$itemKey]);
     cartSetStore($cart);
     return ['success' => true, 'message' => 'Product removed from cart.'];
 }
 
-function updateCartItem(int $productId, int $quantity): array
+function updateCartItem(int $productId, int $quantity, string $itemKey = '', string $color = '', string $size = ''): array
 {
     $product = cartGetProductById($productId);
     if (!$product) {
@@ -511,9 +645,12 @@ function updateCartItem(int $productId, int $quantity): array
     }
 
     $cart = cartGetStore();
+    if (trim($itemKey) === '') {
+        $itemKey = cartBuildItemKey($productId, $color, $size);
+    }
 
     if ($quantity <= 0) {
-        unset($cart[$productId]);
+        unset($cart[$itemKey]);
         cartSetStore($cart);
         return ['success' => true, 'message' => 'Product removed from cart.'];
     }
@@ -525,7 +662,7 @@ function updateCartItem(int $productId, int $quantity): array
         return ['success' => false, 'message' => 'Product is out of stock.'];
     }
 
-    $cart[$productId] = min($quantity, $stock);
+    $cart[$itemKey] = min($quantity, $stock);
     cartSetStore($cart);
     return ['success' => true, 'message' => 'Cart updated.'];
 }
@@ -537,8 +674,16 @@ function getCartItems(): array
         return [];
     }
 
-    $ids = array_keys($cart);
-    $idCsv = implode(',', array_map('intval', $ids));
+    $itemKeys = array_keys($cart);
+    $ids = [];
+    foreach ($itemKeys as $itemKey) {
+        $parsed = cartParseItemKey((string) $itemKey);
+        $pid = (int) ($parsed['product_id'] ?? 0);
+        if ($pid > 0) {
+            $ids[$pid] = true;
+        }
+    }
+    $idCsv = implode(',', array_keys($ids));
     if ($idCsv === '') {
         return [];
     }
@@ -567,14 +712,16 @@ function getCartItems(): array
     $result->free();
 
     $items = [];
-    foreach ($ids as $productId) {
+    foreach ($itemKeys as $itemKey) {
+        $parsed = cartParseItemKey((string) $itemKey);
+        $productId = (int) ($parsed['product_id'] ?? 0);
         if (!isset($products[$productId])) {
             continue;
         }
 
         $product = $products[$productId];
         $stock = max(0, (int) ($product['stock_qty'] ?? 0));
-        $quantity = min((int) $cart[$productId], $stock > 0 ? $stock : (int) $cart[$productId]);
+        $quantity = min((int) $cart[$itemKey], $stock > 0 ? $stock : (int) $cart[$itemKey]);
         if ($quantity <= 0) {
             continue;
         }
@@ -587,8 +734,11 @@ function getCartItems(): array
 
         $items[] = [
             'id' => (int) $product['id'],
+            'item_key' => (string) $itemKey,
             'name' => (string) $product['name'],
             'sku' => (string) ($product['sku'] ?? ''),
+            'color' => (string) ($parsed['color'] ?? ''),
+            'size' => (string) ($parsed['size'] ?? ''),
             'image_path' => $imagePath,
             'price' => $price,
             'qty' => $quantity,
@@ -682,10 +832,29 @@ function createOrderFromCart(int $userId): array
         $couponData = is_array($summary['coupon'] ?? null) ? $summary['coupon'] : null;
         $couponCode = $couponData ? (string) ($couponData['code'] ?? '') : null;
         $status = 'pending';
+        cartStartSession();
+        $checkoutDraft = is_array($_SESSION['checkout_draft'] ?? null) ? $_SESSION['checkout_draft'] : [];
+        $paymentMethod = strtolower(trim((string) ($_REQUEST['payment_method'] ?? ($checkoutDraft['payment_method'] ?? 'cod'))));
+        if (!in_array($paymentMethod, ['cod', 'razorpay'], true)) {
+            $paymentMethod = 'cod';
+        }
+
+        $shippingName = trim((string) ($checkoutDraft['full_name'] ?? $userName));
+        $shippingPhone = trim((string) ($checkoutDraft['phone'] ?? ($user['phone'] ?? '')));
+        $shippingLine1 = trim((string) ($checkoutDraft['address_line1'] ?? ($user['address_line1'] ?? '')));
+        $shippingLine2 = trim((string) ($checkoutDraft['address_line2'] ?? ($user['address_line2'] ?? '')));
+        $shippingCity = trim((string) ($checkoutDraft['city'] ?? ($user['city'] ?? '')));
+        $shippingState = trim((string) ($checkoutDraft['state'] ?? ($user['state'] ?? '')));
+        $shippingCountry = trim((string) ($checkoutDraft['country'] ?? ($user['country'] ?? '')));
+        $shippingPostal = trim((string) ($checkoutDraft['postal_code'] ?? ($user['postal_code'] ?? '')));
+        $eta = date('Y-m-d', strtotime('+5 days'));
 
         $stmt = $db->prepare(
-            'INSERT INTO orders (order_number, user_id, customer_name, customer_email, total_amount, discount_amount, status, coupon_code, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())'
+            'INSERT INTO orders (
+                order_number, user_id, customer_name, customer_email, shipping_name, shipping_phone, shipping_address_line1, shipping_address_line2,
+                shipping_city, shipping_state, shipping_country, shipping_postal_code, estimated_delivery_date, total_amount, discount_amount,
+                status, payment_method, coupon_code, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())'
         );
         if (!$stmt) {
             $stmt = $db->prepare(
@@ -697,7 +866,27 @@ function createOrderFromCart(int $userId): array
             }
             $stmt->bind_param('ids', $userId, $totalAmount, $status);
         } else {
-            $stmt->bind_param('sissddss', $orderNumber, $userId, $userName, $userEmail, $totalAmount, $discountAmount, $status, $couponCode);
+            $stmt->bind_param(
+                'sisssssssssssddsss',
+                $orderNumber,
+                $userId,
+                $userName,
+                $userEmail,
+                $shippingName,
+                $shippingPhone,
+                $shippingLine1,
+                $shippingLine2,
+                $shippingCity,
+                $shippingState,
+                $shippingCountry,
+                $shippingPostal,
+                $eta,
+                $totalAmount,
+                $discountAmount,
+                $status,
+                $paymentMethod,
+                $couponCode
+            );
         }
         $stmt->execute();
         $orderId = (int) $stmt->insert_id;
@@ -747,7 +936,11 @@ function createOrderFromCart(int $userId): array
 
         cartSetStore([]);
         cartClearAppliedCoupon();
+        unset($_SESSION['checkout_draft']);
         $db->commit();
+
+        // Email failure should never block order success.
+        sendOrderConfirmation($orderId);
 
         return [
             'success' => true,

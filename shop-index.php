@@ -76,6 +76,44 @@ function grid_col_class(int $columns): string
     return 'col-md-3 col-sm-6 col-xs-12';
 }
 
+function collect_category_descendant_ids(array $treeByParent, int $parentId): array
+{
+    $ids = [$parentId];
+    $children = $treeByParent[$parentId] ?? [];
+    foreach ($children as $child) {
+        $childId = (int) ($child['id'] ?? 0);
+        if ($childId > 0) {
+            $ids = array_merge($ids, collect_category_descendant_ids($treeByParent, $childId));
+        }
+    }
+    return $ids;
+}
+
+function render_index_category_sidebar(array $treeByParent, int $parentId, string $selectedSlug): void
+{
+    $children = $treeByParent[$parentId] ?? [];
+    if ($children === []) {
+        return;
+    }
+
+    foreach ($children as $node) {
+        $slug = trim((string) ($node['slug'] ?? ''));
+        $name = trim((string) ($node['name'] ?? 'Category'));
+        if ($slug === '' || $name === '') {
+            continue;
+        }
+        $isActive = $selectedSlug === $slug;
+        echo '<li class="list-group-item clearfix' . ($isActive ? ' active' : '') . '">';
+        echo '<a href="shop-index.php?category=' . rawurlencode($slug) . '#featured-products"><i class="fa fa-angle-right"></i> ' . fe_h($name) . '</a>';
+        if (!empty($treeByParent[(int) ($node['id'] ?? 0)])) {
+            echo '<ul class="dropdown-menu" style="display:block;">';
+            render_index_category_sidebar($treeByParent, (int) $node['id'], $selectedSlug);
+            echo '</ul>';
+        }
+        echo '</li>';
+    }
+}
+
 $sectionDefaults = [
     'hero' => ['title' => 'Hero', 'enabled' => true, 'order' => 1],
     'products_from_admin' => ['title' => 'Products From Admin', 'enabled' => true, 'order' => 2],
@@ -154,10 +192,18 @@ if ($heroSlides === []) {
 $selectedCategorySlug = trim((string) ($_GET['category'] ?? ''));
 $selectedCategoryId = 0;
 $categories = [];
-$categoriesResult = $db->query('SELECT id, name, slug, is_active FROM categories WHERE is_active = 1 ORDER BY name ASC');
+$categoriesBySlug = [];
+$categoryTree = [];
+$categoriesResult = $db->query('SELECT id, name, slug, parent_id, is_active FROM categories WHERE is_active = 1 ORDER BY name ASC');
 if ($categoriesResult instanceof mysqli_result) {
     while ($row = $categoriesResult->fetch_assoc()) {
         $categories[] = $row;
+        $slugKey = trim((string) ($row['slug'] ?? ''));
+        if ($slugKey !== '') {
+            $categoriesBySlug[$slugKey] = (int) ($row['id'] ?? 0);
+        }
+        $parentId = (int) ($row['parent_id'] ?? 0);
+        $categoryTree[$parentId][] = $row;
         if ($selectedCategorySlug !== '' && $selectedCategorySlug === (string) $row['slug']) {
             $selectedCategoryId = (int) $row['id'];
         }
@@ -196,9 +242,13 @@ if ($allProducts === []) {
 }
 
 $products = $allProducts;
+if ($selectedCategorySlug !== '' && $selectedCategoryId <= 0 && isset($categoriesBySlug[$selectedCategorySlug])) {
+    $selectedCategoryId = (int) $categoriesBySlug[$selectedCategorySlug];
+}
 if ($selectedCategoryId > 0) {
-    $products = array_values(array_filter($allProducts, static function (array $product) use ($selectedCategoryId): bool {
-        return (int) ($product['category_id'] ?? 0) === $selectedCategoryId;
+    $selectedCategoryIds = array_values(array_unique(array_map('intval', collect_category_descendant_ids($categoryTree, $selectedCategoryId))));
+    $products = array_values(array_filter($allProducts, static function (array $product) use ($selectedCategoryIds): bool {
+        return in_array((int) ($product['category_id'] ?? 0), $selectedCategoryIds, true);
     }));
 }
 
@@ -373,18 +423,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <li class="list-group-item clearfix<?php echo $selectedCategorySlug === '' ? ' active' : ''; ?>">
                       <a href="shop-index.php#featured-products"><i class="fa fa-angle-right"></i> <?php echo fe_h($allCategoriesLabel); ?></a>
                     </li>
-                    <?php foreach ($categories as $category): ?>
-                      <?php
-                        $catSlug = (string) ($category['slug'] ?? '');
-                        $catName = trim((string) ($category['name'] ?? 'Category'));
-                        if ($catSlug === '' || $catName === '') {
-                            continue;
-                        }
-                      ?>
-                      <li class="list-group-item clearfix<?php echo $selectedCategorySlug === $catSlug ? ' active' : ''; ?>">
-                        <a href="shop-index.php?category=<?php echo rawurlencode($catSlug); ?>#featured-products"><i class="fa fa-angle-right"></i> <?php echo fe_h($catName); ?></a>
-                      </li>
-                    <?php endforeach; ?>
+                    <?php render_index_category_sidebar($categoryTree, 0, $selectedCategorySlug); ?>
                   </ul>
                   <div
                     class="sidebar-filter"
@@ -417,9 +456,10 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                           data-stock="<?php echo (int) ($product['stock_qty'] ?? 0); ?>"
                           data-category="<?php echo fe_h($categoryName); ?>">
                           <div class="pi-img-wrapper">
-                            <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            <a href="shop-item.php?id=<?php echo $productId; ?>" class="product-image-link">
+                              <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            </a>
                             <div>
-                              <a href="<?php echo fe_h($img); ?>" class="btn btn-default fancybox-button">Zoom</a>
                               <a href="shop-item.php?id=<?php echo $productId; ?>" class="btn btn-default js-quick-view">Quick View</a>
                             </div>
                           </div>
@@ -465,9 +505,10 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                           data-stock="<?php echo (int) ($product['stock_qty'] ?? 0); ?>"
                           data-category="<?php echo fe_h($categoryName); ?>">
                           <div class="pi-img-wrapper">
-                            <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            <a href="shop-item.php?id=<?php echo $productId; ?>" class="product-image-link">
+                              <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            </a>
                             <div>
-                              <a href="<?php echo fe_h($img); ?>" class="btn btn-default fancybox-button">Zoom</a>
                               <a href="shop-item.php?id=<?php echo $productId; ?>" class="btn btn-default js-quick-view">Quick View</a>
                             </div>
                           </div>
@@ -511,9 +552,10 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                           data-stock="<?php echo (int) ($product['stock_qty'] ?? 0); ?>"
                           data-category="<?php echo fe_h($categoryName); ?>">
                           <div class="pi-img-wrapper">
-                            <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            <a href="shop-item.php?id=<?php echo $productId; ?>" class="product-image-link">
+                              <img src="<?php echo fe_h($img); ?>" class="img-responsive" alt="<?php echo fe_h((string) ($product['name'] ?? 'Product')); ?>" loading="lazy" decoding="async">
+                            </a>
                             <div>
-                              <a href="<?php echo fe_h($img); ?>" class="btn btn-default fancybox-button">Zoom</a>
                               <a href="shop-item.php?id=<?php echo $productId; ?>" class="btn btn-default js-quick-view">Quick View</a>
                             </div>
                           </div>

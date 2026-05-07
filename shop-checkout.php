@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth-functions.php';
+require_once __DIR__ . '/cart-functions.php';
 auth_start_session();
 if (auth_current_user_id() <= 0) {
     header('Location: login.php?next=' . rawurlencode('shop-checkout.php'));
@@ -23,6 +24,31 @@ $userCity = trim((string) ($user['city'] ?? ''));
 $userState = trim((string) ($user['state'] ?? ''));
 $userCountry = trim((string) ($user['country'] ?? ''));
 $userPostal = trim((string) ($user['postal_code'] ?? ''));
+$savedAddresses = [];
+$defaultSavedAddressId = 0;
+$db = cart_db();
+$savedStmt = $db->prepare(
+    "SELECT id, full_name, phone, address_line1, address_line2, city, state, postal_code, country, is_default
+     FROM user_saved_addresses
+     WHERE user_id = ?
+     ORDER BY is_default DESC, id DESC"
+);
+if ($savedStmt) {
+    $uid = auth_current_user_id();
+    $savedStmt->bind_param('i', $uid);
+    $savedStmt->execute();
+    $savedRes = $savedStmt->get_result();
+    if ($savedRes instanceof mysqli_result) {
+        while ($row = $savedRes->fetch_assoc()) {
+            $savedAddresses[] = $row;
+            if ((int) ($row['is_default'] ?? 0) === 1 && $defaultSavedAddressId === 0) {
+                $defaultSavedAddressId = (int) ($row['id'] ?? 0);
+            }
+        }
+        $savedRes->free();
+    }
+    $savedStmt->close();
+}
 ?>
 <!DOCTYPE html>
 <!--
@@ -245,6 +271,29 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                         <label for="address1">Address 1</label>
                         <input type="text" id="address1" class="form-control" name="address1" value="<?php echo auth_h($userAddress1); ?>" autocomplete="address-line1">
                       </div>
+                      <?php if ($savedAddresses !== []): ?>
+                      <div class="form-group">
+                        <label for="saved-address-id">Use saved address</label>
+                        <select id="saved-address-id" class="form-control" name="saved_address_id">
+                          <option value="0">Use current form address</option>
+                          <?php foreach ($savedAddresses as $saved): ?>
+                            <?php
+                              $sid = (int) ($saved['id'] ?? 0);
+                              $slabel = trim((string) ($saved['full_name'] ?? 'Address')) . ' - ' . trim((string) ($saved['address_line1'] ?? ''));
+                            ?>
+                            <option value="<?php echo $sid; ?>" <?php echo ($sid === $defaultSavedAddressId) ? 'selected' : ''; ?>>
+                              <?php echo auth_h($slabel); ?>
+                            </option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+                      <div class="checkbox">
+                        <label><input type="checkbox" id="use-saved-address" name="use_saved_address" value="1" <?php echo $defaultSavedAddressId > 0 ? 'checked' : ''; ?>> Use saved address</label>
+                      </div>
+                      <div class="checkbox">
+                        <label><input type="checkbox" id="edit-address" name="edit_address" value="1"> Edit address</label>
+                      </div>
+                      <?php endif; ?>
                       <div class="form-group">
                         <label for="address2">Address 2</label>
                         <input type="text" id="address2" class="form-control" name="address2" value="<?php echo auth_h($userAddress2); ?>" autocomplete="address-line2">
@@ -276,6 +325,11 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                       <div class="checkbox">
                         <label>
                           <input type="checkbox" checked="checked" name="checkbox_0"> My delivery and billing addresses are the same.
+                        </label>
+                      </div>
+                      <div class="checkbox">
+                        <label>
+                          <input type="checkbox" id="save-address-for-future" name="save_address" value="1"> Save this address for future purchases.
                         </label>
                       </div>
                       <button class="btn btn-primary  pull-right" type="submit" data-toggle="collapse" data-parent="#checkout-page" data-target="#shipping-address-content" id="button-payment-address">Continue</button>
@@ -566,6 +620,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
         country: "<?php echo auth_h($userCountry); ?>",
         state: "<?php echo auth_h($userState); ?>"
       };
+      window.checkoutSavedAddresses = <?php echo json_encode($savedAddresses, JSON_UNESCAPED_SLASHES); ?>;
     </script>
     <script src="assets/pages/scripts/shop-modern.js" type="text/javascript"></script>
     <script src="assets/pages/scripts/checkout.js" type="text/javascript"></script>

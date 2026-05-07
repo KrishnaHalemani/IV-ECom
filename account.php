@@ -12,6 +12,24 @@ $userId = auth_current_user_id();
 $user = auth_get_user_by_id($userId);
 $successMessage = auth_flash_get('success');
 
+function order_status_class(string $status): string
+{
+    $key = strtolower(trim($status));
+    if (in_array($key, ['delivered', 'completed', 'success'], true)) {
+        return 'is-delivered';
+    }
+    if (in_array($key, ['shipped', 'out_for_delivery', 'dispatch', 'dispatched'], true)) {
+        return 'is-shipped';
+    }
+    if (in_array($key, ['processing', 'confirmed'], true)) {
+        return 'is-processing';
+    }
+    if (in_array($key, ['cancelled', 'canceled', 'failed', 'returned'], true)) {
+        return 'is-cancelled';
+    }
+    return 'is-pending';
+}
+
 $orders = [];
 $orderStmt = $db->prepare(
     "SELECT id, total_amount, status, created_at
@@ -91,17 +109,17 @@ if ($orders !== []) {
       </ul>
 
       <div class="row margin-bottom-40">
-        <div class="col-md-12">
+        <div class="col-md-12 account-page-wrap">
           <h1>My Account</h1>
           <div class="content-page">
-            <div class="panel panel-default" style="margin-bottom:16px;">
+            <div class="panel panel-default account-welcome-panel">
               <div class="panel-body">
-                <div class="row">
-                  <div class="col-sm-8">
+                <div class="row account-welcome-row">
+                  <div class="col-sm-8 account-welcome-left">
                     <p class="margin-bottom-5">Welcome, <strong><?php echo auth_h(trim((string) ($user['name'] ?? $user['full_name'] ?? 'User'))); ?></strong></p>
                     <p class="text-muted"><?php echo auth_h((string) ($user['email'] ?? '')); ?></p>
                   </div>
-                  <div class="col-sm-4 text-right">
+                  <div class="col-sm-4 text-right account-welcome-actions">
                     <a class="btn btn-default margin-bottom-10" href="shop-index.php">Continue Shopping</a>
                     <a class="btn btn-primary margin-bottom-10" href="user-logout.php">Logout</a>
                   </div>
@@ -118,25 +136,25 @@ if ($orders !== []) {
               <div class="alert alert-info">No orders yet.</div>
             <?php else: ?>
               <?php foreach ($orders as $order): ?>
-                <div class="panel panel-default">
-                  <div class="panel-heading">
-                    <div class="row">
-                      <div class="col-sm-8">
+                <div class="panel panel-default account-order-card">
+                  <div class="panel-heading account-order-head">
+                    <div class="row account-order-head-row">
+                      <div class="col-sm-8 account-order-main">
                         <strong>Order #<?php echo (int) $order['id']; ?></strong>
                         <div class="text-muted">Placed: <?php echo auth_h((string) $order['created_at']); ?></div>
                       </div>
-                      <div class="col-sm-4 text-right">
-                        <span class="label label-info"><?php echo auth_h(ucfirst((string) $order['status'])); ?></span>
-                        <div><strong>₹ <?php echo number_format((float) $order['total_amount'], 2); ?></strong></div>
-                        <div style="margin-top:8px;">
+                      <div class="col-sm-4 text-right account-order-meta">
+                        <span class="order-status-pill <?php echo order_status_class((string) $order['status']); ?>"><?php echo auth_h(ucfirst((string) $order['status'])); ?></span>
+                        <div class="account-order-total"><strong>₹ <?php echo number_format((float) $order['total_amount'], 2); ?></strong></div>
+                        <div class="account-order-invoice">
                           <a class="btn btn-xs btn-default" href="invoice-download.php?order_id=<?php echo (int) $order['id']; ?>">Download Invoice</a>
                         </div>
                       </div>
                     </div>
                   </div>
                   <?php if ($order['items'] !== []): ?>
-                    <div class="table-responsive">
-                      <table class="table table-bordered table-striped margin-bottom-0">
+                    <div class="table-responsive account-order-table-wrap">
+                      <table class="table table-bordered table-striped margin-bottom-0 account-order-table">
                         <thead>
                           <tr>
                             <th>Product</th>

@@ -121,6 +121,35 @@ function parse_color_image_map(string $json): array
     return $map;
 }
 
+function render_item_category_sidebar(array $treeByParent, int $parentId, int $currentCategoryId): void
+{
+    $children = $treeByParent[$parentId] ?? [];
+    if ($children === []) {
+        return;
+    }
+    foreach ($children as $categoryRow) {
+        $categoryId = (int) ($categoryRow['id'] ?? 0);
+        $categoryName = trim((string) ($categoryRow['name'] ?? ''));
+        $categorySlug = trim((string) ($categoryRow['slug'] ?? ''));
+        if ($categoryId <= 0 || $categoryName === '') {
+            continue;
+        }
+        $categoryLink = 'shop-index.php';
+        if ($categorySlug !== '') {
+            $categoryLink .= '?category=' . urlencode($categorySlug);
+        }
+        $isCurrentCategory = $categoryId === $currentCategoryId;
+        echo '<li class="list-group-item clearfix' . ($isCurrentCategory ? ' active' : '') . '">';
+        echo '<a href="' . fe_h($categoryLink) . '"><i class="fa fa-angle-right"></i> ' . fe_h($categoryName) . '</a>';
+        if (!empty($treeByParent[$categoryId])) {
+            echo '<ul class="dropdown-menu" style="display:block;">';
+            render_item_category_sidebar($treeByParent, $categoryId, $currentCategoryId);
+            echo '</ul>';
+        }
+        echo '</li>';
+    }
+}
+
 $db = get_db_connection();
 ensure_product_reviews_table($db);
 ensure_product_option_columns($db);
@@ -129,7 +158,7 @@ $selectedProduct = null;
 
 if ($productId > 0) {
     $stmt = $db->prepare(
-        "SELECT p.id, p.name, p.sku, p.image_path, p.description, p.price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
+        "SELECT p.id, p.name, p.sku, p.image_path, p.description, p.price, p.compare_price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
                 c.name AS category_name, c.slug AS category_slug
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
@@ -138,7 +167,7 @@ if ($productId > 0) {
     );
     if (!$stmt) {
         $stmt = $db->prepare(
-            "SELECT p.id, p.name, p.sku, '' AS image_path, p.description, p.price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
+            "SELECT p.id, p.name, p.sku, '' AS image_path, p.description, p.price, p.compare_price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
                     c.name AS category_name, c.slug AS category_slug
              FROM products p
              LEFT JOIN categories c ON c.id = p.category_id
@@ -157,7 +186,7 @@ if ($productId > 0) {
 
 if (!$selectedProduct) {
     $fallback = $db->query(
-        "SELECT p.id, p.name, p.sku, p.image_path, p.description, p.price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
+        "SELECT p.id, p.name, p.sku, p.image_path, p.description, p.price, p.compare_price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
                 c.name AS category_name, c.slug AS category_slug
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
@@ -167,7 +196,7 @@ if (!$selectedProduct) {
     );
     if ($fallback === false) {
         $fallback = $db->query(
-            "SELECT p.id, p.name, p.sku, '' AS image_path, p.description, p.price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
+            "SELECT p.id, p.name, p.sku, '' AS image_path, p.description, p.price, p.compare_price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
                     c.name AS category_name, c.slug AS category_slug
              FROM products p
              LEFT JOIN categories c ON c.id = p.category_id
@@ -184,6 +213,7 @@ if (!$selectedProduct) {
 
 $productName = $selectedProduct ? (string) $selectedProduct['name'] : 'Cool green dress with red bell';
 $productPrice = $selectedProduct ? (float) $selectedProduct['price'] : 47.00;
+$productComparePrice = $selectedProduct ? (float) ($selectedProduct['compare_price'] ?? 0) : 0.00;
 $productStock = $selectedProduct ? (int) $selectedProduct['stock_qty'] : 10;
 $productDesc = $selectedProduct ? trim((string) $selectedProduct['description']) : '';
 $productSku = $selectedProduct ? trim((string) ($selectedProduct['sku'] ?? '')) : '';
@@ -208,10 +238,13 @@ if ($currentCategoryName === '') {
 $currentCategorySlug = trim((string) ($selectedProduct['category_slug'] ?? ''));
 
 $sidebarCategories = [];
-$categoriesResult = $db->query('SELECT id, name, slug FROM categories WHERE is_active = 1 ORDER BY name ASC');
+$sidebarCategoryTree = [];
+$categoriesResult = $db->query('SELECT id, name, slug, parent_id FROM categories WHERE is_active = 1 ORDER BY name ASC');
 if ($categoriesResult instanceof mysqli_result) {
     while ($categoryRow = $categoriesResult->fetch_assoc()) {
         $sidebarCategories[] = $categoryRow;
+        $parentId = (int) ($categoryRow['parent_id'] ?? 0);
+        $sidebarCategoryTree[$parentId][] = $categoryRow;
     }
     $categoriesResult->free();
 }
@@ -224,11 +257,14 @@ foreach ($sidebarCategories as $categoryRow) {
     }
 }
 if ($currentCategoryId > 0 && !$categoryFoundInSidebar) {
-    $sidebarCategories[] = [
+    $missing = [
         'id' => $currentCategoryId,
         'name' => $currentCategoryName,
         'slug' => $currentCategorySlug,
+        'parent_id' => 0,
     ];
+    $sidebarCategories[] = $missing;
+    $sidebarCategoryTree[0][] = $missing;
 }
 
 $currentCategoryLink = 'shop-index.php';
@@ -478,24 +514,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   <a href="shop-index.php"><i class="fa fa-angle-right"></i> <?php echo fe_h($currentCategoryName); ?></a>
                 </li>
               <?php else: ?>
-                <?php foreach ($sidebarCategories as $categoryRow): ?>
-                  <?php
-                    $categoryId = (int) ($categoryRow['id'] ?? 0);
-                    $categoryName = trim((string) ($categoryRow['name'] ?? ''));
-                    $categorySlug = trim((string) ($categoryRow['slug'] ?? ''));
-                    if ($categoryName === '') {
-                        continue;
-                    }
-                    $categoryLink = 'shop-index.php';
-                    if ($categorySlug !== '') {
-                        $categoryLink .= '?category=' . urlencode($categorySlug);
-                    }
-                    $isCurrentCategory = $categoryId > 0 && $categoryId === $currentCategoryId;
-                  ?>
-                  <li class="list-group-item clearfix<?php echo $isCurrentCategory ? ' active' : ''; ?>">
-                    <a href="<?php echo fe_h($categoryLink); ?>"><i class="fa fa-angle-right"></i> <?php echo fe_h($categoryName); ?></a>
-                  </li>
-                <?php endforeach; ?>
+                <?php render_item_category_sidebar($sidebarCategoryTree, 0, $currentCategoryId); ?>
               <?php endif; ?>
             </ul>
 
@@ -534,7 +553,9 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
               <div class="row">
                 <div class="col-md-6 col-sm-6">
                   <div class="product-main-image">
-                    <img src="<?php echo fe_h($productImg); ?>" alt="<?php echo fe_h($productName); ?>" class="img-responsive" data-BigImgsrc="<?php echo fe_h($productImg); ?>" loading="lazy" decoding="async">
+                    <a href="<?php echo fe_h($productImg); ?>" class="fancybox-button product-main-image-link" rel="product-main-photo">
+                      <img src="<?php echo fe_h($productImg); ?>" alt="<?php echo fe_h($productName); ?>" class="img-responsive" data-BigImgsrc="<?php echo fe_h($productImg); ?>" loading="lazy" decoding="async">
+                    </a>
                   </div>
                   <div class="product-other-images">
                     <?php foreach ($productImageSet as $index => $imagePath): ?>
@@ -547,7 +568,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                       }
                       $thumbColorAttr = implode(',', $thumbColors);
                       ?>
-                      <a href="<?php echo fe_h($imagePath); ?>" class="fancybox-button<?php echo $index === 0 ? ' active' : ''; ?>" rel="photos-lib" data-main-image="true">
+                      <a href="<?php echo fe_h($imagePath); ?>" class="product-thumb-link<?php echo $index === 0 ? ' active' : ''; ?>" data-main-image="true">
                         <img alt="<?php echo fe_h($productName); ?>" src="<?php echo fe_h($imagePath); ?>" loading="lazy" decoding="async" data-colors="<?php echo fe_h($thumbColorAttr); ?>">
                       </a>
                     <?php endforeach; ?>
@@ -558,7 +579,9 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   <div class="price-availability-block clearfix">
                     <div class="price">
                       <strong><span>&#8377;</span><?php echo number_format($productPrice, 2); ?></strong>
-                      <em>&#8377;<span>62.00</span></em>
+                      <?php if ($productComparePrice > $productPrice): ?>
+                        <em>&#8377;<span><?php echo number_format($productComparePrice, 2); ?></span></em>
+                      <?php endif; ?>
                     </div>
                     <div class="availability">
                       Availability: <strong><?php echo $availabilityLabel; ?></strong>
@@ -591,9 +614,9 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   </div>
                   <div class="product-page-cart">
                     <div class="product-quantity">
-                        <button type="button" class="btn btn-default btn-sm" id="qty-decrease">-</button>
-                        <input id="product-quantity" type="text" value="1" readonly class="form-control input-sm" name="product-quantity" style="display:inline-block; width:60px; text-align:center;">
-                        <button type="button" class="btn btn-default btn-sm" id="qty-increase">+</button>
+                        <button type="button" class="qty-btn qty-minus" id="qty-decrease" aria-label="Decrease quantity">-</button>
+                        <input id="product-quantity" type="number" min="1" step="1" value="1" class="form-control input-sm qty-input" name="product-quantity">
+                        <button type="button" class="qty-btn qty-plus" id="qty-increase" aria-label="Increase quantity">+</button>
                     </div>
                     <button class="btn btn-primary" type="submit" data-product-id="<?php echo $selectedProductId; ?>">Add to cart</button>
                   </div>
@@ -748,7 +771,6 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                       <div class="pi-img-wrapper">
                         <img src="<?php echo fe_h($relatedImg); ?>" class="img-responsive" alt="<?php echo fe_h($relatedName); ?>" loading="lazy" decoding="async">
                         <div>
-                          <a href="<?php echo fe_h($relatedImg); ?>" class="btn btn-default fancybox-button">Zoom</a>
                           <a href="shop-item.php?id=<?php echo (int) $related['id']; ?>" class="btn btn-default js-quick-view">Quick View</a>
                         </div>
                       </div>
@@ -803,7 +825,6 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                       <div class="pi-img-wrapper">
                         <img src="<?php echo fe_h($popularImg); ?>" class="img-responsive" alt="<?php echo fe_h($popularName); ?>">
                         <div>
-                          <a href="<?php echo fe_h($popularImg); ?>" class="btn btn-default fancybox-button">Zoom</a>
                           <a href="shop-item.php?id=<?php echo $popularId; ?>" class="btn btn-default js-quick-view">View</a>
                         </div>
                       </div>
@@ -926,16 +947,24 @@ Nostrud duis molestie at dolore.</p>
                 jQuery('#myTab a[href="' + hash + '"]').tab('show');
             }
 
-            jQuery('.product-other-images a[data-main-image="true"]').on('click', function () {
-                var src = jQuery(this).attr('href');
+            function setMainProductImage(src, activeThumb) {
                 if (!src) {
                     return;
                 }
                 var mainImage = jQuery('.product-main-image img');
                 mainImage.attr('src', src);
                 mainImage.attr('data-BigImgsrc', src);
-                jQuery('.product-other-images a').removeClass('active');
-                jQuery(this).addClass('active');
+                jQuery('.product-main-image-link').attr('href', src);
+                if (activeThumb && activeThumb.length) {
+                    jQuery('.product-other-images a').removeClass('active');
+                    activeThumb.addClass('active');
+                }
+            }
+
+            jQuery('.product-other-images a[data-main-image="true"]').on('click', function (event) {
+                event.preventDefault();
+                var src = jQuery(this).attr('href');
+                setMainProductImage(src, jQuery(this));
             });
 
             var colorSelect = jQuery('#product-color-select');
@@ -970,7 +999,7 @@ Nostrud duis molestie at dolore.</p>
                 });
 
                 if (firstMatch && firstMatch.length) {
-                    firstMatch.trigger('click');
+                    setMainProductImage(firstMatch.attr('href'), firstMatch);
                 } else {
                     thumbs.show();
                 }
@@ -994,6 +1023,12 @@ Nostrud duis molestie at dolore.</p>
                     return;
                 }
                 qtyInput.val(current - 1);
+            });
+            qtyInput.on('input blur', function () {
+                var current = parseInt(qtyInput.val(), 10);
+                if (isNaN(current) || current < 1) {
+                    qtyInput.val(1);
+                }
             });
         });
     </script>

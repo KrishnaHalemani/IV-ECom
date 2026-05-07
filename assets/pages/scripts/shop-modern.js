@@ -301,12 +301,19 @@
     var html = summaryHtml;
     for (var i = 0; i < cartState.items.length; i += 1) {
       var item = cartState.items[i];
+      var variantLabel = [];
+      if (item.color) {
+        variantLabel.push('Color: ' + String(item.color));
+      }
+      if (item.size) {
+        variantLabel.push('Size: ' + String(item.size));
+      }
       html += '<li data-product-id="' + escapeHtml(item.id) + '">' +
         '<a href="' + escapeHtml(item.item_url) + '"><img src="' + escapeHtml(item.image_path) + '" alt="' + escapeHtml(item.name) + '" width="37" height="34"></a>' +
         '<span class="cart-content-count">x ' + escapeHtml(item.qty) + '</span>' +
-        '<strong><a href="' + escapeHtml(item.item_url) + '">' + escapeHtml(item.name) + '</a></strong>' +
+        '<strong><a href="' + escapeHtml(item.item_url) + '">' + escapeHtml(item.name) + '</a>' + (variantLabel.length ? '<br><small>' + escapeHtml(variantLabel.join(' | ')) + '</small>' : '') + '</strong>' +
         '<em>' + formatPrice(item.subtotal) + '</em>' +
-        '<a href="javascript:void(0);" class="del-goods js-cart-remove" data-product-id="' + escapeHtml(item.id) + '">&nbsp;</a>' +
+        '<a href="javascript:void(0);" class="del-goods js-cart-remove" data-product-id="' + escapeHtml(item.id) + '" data-item-key="' + escapeHtml(item.item_key || '') + '">&nbsp;</a>' +
         '</li>';
     }
 
@@ -339,16 +346,23 @@
     } else {
       for (var i = 0; i < cartState.items.length; i += 1) {
         var item = cartState.items[i];
+        var variantMeta = [];
+        if (item.color) {
+          variantMeta.push('Color: ' + String(item.color));
+        }
+        if (item.size) {
+          variantMeta.push('Size: ' + String(item.size));
+        }
         var row = document.createElement('tr');
         row.className = 'cart-row';
         row.setAttribute('data-product-id', item.id);
         row.innerHTML = '<td class="goods-page-image"><a href="' + escapeHtml(item.item_url) + '"><img src="' + escapeHtml(item.image_path) + '" alt="' + escapeHtml(item.name) + '"></a></td>' +
-          '<td class="goods-page-description"><h3><a href="' + escapeHtml(item.item_url) + '">' + escapeHtml(item.name) + '</a></h3><em>In cart</em></td>' +
+          '<td class="goods-page-description"><h3><a href="' + escapeHtml(item.item_url) + '">' + escapeHtml(item.name) + '</a></h3><em>' + escapeHtml(variantMeta.length ? variantMeta.join(' | ') : 'In cart') + '</em></td>' +
           '<td class="goods-page-ref-no">' + escapeHtml(item.sku || ('SKU-' + item.id)) + '</td>' +
-          '<td class="goods-page-quantity"><div class="shop-qty-control"><button type="button" class="js-cart-page-qty" data-step="-1" data-product-id="' + escapeHtml(item.id) + '">-</button><span>' + escapeHtml(item.qty) + '</span><button type="button" class="js-cart-page-qty" data-step="1" data-product-id="' + escapeHtml(item.id) + '">+</button></div></td>' +
+          '<td class="goods-page-quantity"><div class="shop-qty-control"><button type="button" class="js-cart-page-qty" data-step="-1" data-product-id="' + escapeHtml(item.id) + '" data-item-key="' + escapeHtml(item.item_key || '') + '">-</button><span>' + escapeHtml(item.qty) + '</span><button type="button" class="js-cart-page-qty" data-step="1" data-product-id="' + escapeHtml(item.id) + '" data-item-key="' + escapeHtml(item.item_key || '') + '">+</button></div></td>' +
           '<td class="goods-page-price"><strong><span>' + RUPEE + '</span>' + Number(item.price || 0).toFixed(2) + '</strong></td>' +
           '<td class="goods-page-total"><strong><span>' + RUPEE + '</span>' + Number(item.subtotal || 0).toFixed(2) + '</strong></td>' +
-          '<td class="del-goods-col"><a class="del-goods js-cart-remove" href="javascript:void(0);" data-product-id="' + escapeHtml(item.id) + '">&nbsp;</a></td>';
+          '<td class="del-goods-col"><a class="del-goods js-cart-remove" href="javascript:void(0);" data-product-id="' + escapeHtml(item.id) + '" data-item-key="' + escapeHtml(item.item_key || '') + '">&nbsp;</a></td>';
         table.appendChild(row);
       }
     }
@@ -482,11 +496,16 @@
     };
   }
 
-  function addToCart(productId, quantity) {
-    apiCart('add', {
+  function addToCart(productId, quantity, variant) {
+    var payload = {
       product_id: productId,
       qty: quantity || 1
-    }, function (response) {
+    };
+    if (variant && typeof variant === 'object') {
+      payload.color = String(variant.color || '').trim();
+      payload.size = String(variant.size || '').trim();
+    }
+    apiCart('add', payload, function (response) {
       if (response.success) {
         showToast('Product added to cart.', 'success');
       } else {
@@ -495,10 +514,10 @@
     });
   }
 
-  function changeCartQty(productId, step) {
+  function changeCartQty(productId, itemKey, step) {
     var target = null;
     for (var i = 0; i < cartState.items.length; i += 1) {
-      if (String(cartState.items[i].id) === String(productId)) {
+      if (String(cartState.items[i].item_key || '') === String(itemKey || '')) {
         target = cartState.items[i];
         break;
       }
@@ -506,12 +525,13 @@
 
     var nextQty = target ? Number(target.qty) + Number(step) : Number(step);
     if (nextQty <= 0) {
-      apiCart('remove', { product_id: productId }, function () {});
+      apiCart('remove', { product_id: productId, item_key: itemKey || '' }, function () {});
       return;
     }
 
     apiCart('update', {
       product_id: productId,
+      item_key: itemKey || '',
       qty: nextQty
     }, function () {});
   }
@@ -557,7 +577,7 @@
         event.preventDefault();
         var id = parseInt(addBtn.getAttribute('data-product-id'), 10);
         if (id > 0) {
-          addToCart(id, 1);
+        addToCart(id, 1, {});
         }
       }
 
@@ -567,7 +587,7 @@
         var card = legacyAdd.closest('.product-item');
         var product = productDataFromCard(card);
         if (product && product.id > 0) {
-          addToCart(product.id, 1);
+          addToCart(product.id, 1, {});
         } else {
           showToast('This product is not linked to the database item.', 'info');
         }
@@ -578,7 +598,8 @@
         event.preventDefault();
         var removeId = parseInt(removeBtn.getAttribute('data-product-id'), 10);
         if (removeId > 0) {
-          apiCart('remove', { product_id: removeId }, function () {});
+          var removeItemKey = String(removeBtn.getAttribute('data-item-key') || '');
+          apiCart('remove', { product_id: removeId, item_key: removeItemKey }, function () {});
         }
       }
 
@@ -587,8 +608,9 @@
         event.preventDefault();
         var qtyId = parseInt(qtyBtn.getAttribute('data-product-id'), 10);
         var step = parseInt(qtyBtn.getAttribute('data-step'), 10);
+        var itemKey = String(qtyBtn.getAttribute('data-item-key') || '');
         if (qtyId > 0 && step !== 0) {
-          changeCartQty(qtyId, step);
+          changeCartQty(qtyId, itemKey, step);
         }
       }
     });
@@ -641,7 +663,7 @@
     modal.addEventListener('click', function (event) {
       var add = event.target.closest('.js-qv-add');
       if (add && quickState.product) {
-        addToCart(quickState.product.id, 1);
+        addToCart(quickState.product.id, 1, {});
       }
     });
   }
@@ -665,7 +687,13 @@
         if (!qty || qty < 1) {
           qty = 1;
         }
-        addToCart(product.id, qty);
+        var colorSelect = page.querySelector('select[name="product_color"]');
+        var sizeSelect = page.querySelector('select[name="product_size"]');
+        var variant = {
+          color: colorSelect ? String(colorSelect.value || '').trim() : '',
+          size: sizeSelect ? String(sizeSelect.value || '').trim() : ''
+        };
+        addToCart(product.id, qty, variant);
       });
     }
 
@@ -1053,9 +1081,10 @@
         flatCells[i].innerHTML =
           '<div class="product-item" data-product-id="' + escapeHtml(p.id) + '" data-product-price="' + escapeHtml(Number(p.price || 0).toFixed(2)) + '" data-stock="' + escapeHtml(p.stock_qty) + '" data-category="' + escapeHtml(p.category_name || 'General') + '">' +
             '<div class="pi-img-wrapper">' +
-              '<img src="' + escapeHtml(p.image_path) + '" class="img-responsive" alt="' + escapeHtml(p.name) + '" loading="lazy" decoding="async">' +
+              '<a href="' + escapeHtml(p.item_url || ('shop-item.php?id=' + p.id)) + '" class="product-image-link">' +
+                '<img src="' + escapeHtml(p.image_path) + '" class="img-responsive" alt="' + escapeHtml(p.name) + '" loading="lazy" decoding="async">' +
+              '</a>' +
               '<div>' +
-                '<a href="' + escapeHtml(p.image_path) + '" class="btn btn-default fancybox-button">Zoom</a>' +
                 '<a href="' + escapeHtml(p.item_url || ('shop-item.php?id=' + p.id)) + '" class="btn btn-default js-quick-view">Quick View</a>' +
               '</div>' +
             '</div>' +
@@ -1192,6 +1221,43 @@
       return selected ? selected.value : 'cod';
     }
 
+    function applySavedAddressFromSelection() {
+      var list = window.checkoutSavedAddresses || [];
+      var select = document.querySelector('#saved-address-id');
+      var useSaved = document.querySelector('#use-saved-address');
+      var editAddress = document.querySelector('#edit-address');
+      if (!select || !useSaved) {
+        return;
+      }
+      if (!useSaved.checked || (editAddress && editAddress.checked)) {
+        return;
+      }
+      var selectedId = parseInt(select.value || '0', 10) || 0;
+      if (selectedId <= 0) {
+        return;
+      }
+      var chosen = null;
+      for (var i = 0; i < list.length; i += 1) {
+        if (parseInt(list[i].id || 0, 10) === selectedId) {
+          chosen = list[i];
+          break;
+        }
+      }
+      if (!chosen) {
+        return;
+      }
+      var full = String(chosen.full_name || '').trim().split(/\s+/);
+      $('#firstname').val(full[0] || '');
+      $('#lastname').val(full.slice(1).join(' '));
+      $('#telephone').val(String(chosen.phone || ''));
+      $('#address1').val(String(chosen.address_line1 || ''));
+      $('#address2').val(String(chosen.address_line2 || ''));
+      $('#city').val(String(chosen.city || ''));
+      $('#region-state').val(String(chosen.state || ''));
+      $('#country').val(String(chosen.country || ''));
+      $('#post-code').val(String(chosen.postal_code || ''));
+    }
+
     function postJson(url, payload, callback) {
       $.ajax({
         url: url,
@@ -1232,7 +1298,12 @@
         city: ($('#city').val() || '').trim(),
         state: stateValue,
         country: countryValue,
-        postal_code: ($('#post-code').val() || '').trim()
+        postal_code: ($('#post-code').val() || '').trim(),
+        save_address: $('#save-address-for-future').is(':checked') ? 1 : 0,
+        use_saved_address: $('#use-saved-address').is(':checked') ? 1 : 0,
+        edit_address: $('#edit-address').is(':checked') ? 1 : 0,
+        saved_address_id: parseInt($('#saved-address-id').val() || '0', 10) || 0,
+        payment_method: selectedPaymentMethod()
       };
 
       postJson('checkout-save-profile.php', payload, function (response) {
@@ -1241,7 +1312,7 @@
     }
 
     function placeCodOrder() {
-      apiCart('checkout', {}, function (response) {
+      apiCart('checkout', { payment_method: selectedPaymentMethod() }, function (response) {
         confirmBtn.disabled = false;
         if (response && response.success) {
           showToast(response.message || 'Order placed successfully.', 'success');
@@ -1281,6 +1352,7 @@
             color: '#e84d1c'
           },
           handler: function (paymentResponse) {
+            paymentResponse.payment_method = selectedPaymentMethod();
             postJson('razorpay-verify.php', paymentResponse, function (verifyResp) {
               confirmBtn.disabled = false;
               if (verifyResp && verifyResp.success) {
@@ -1315,6 +1387,7 @@
 
     confirmBtn.addEventListener('click', function (event) {
       event.preventDefault();
+      applySavedAddressFromSelection();
 
       if (!authState.logged_in) {
         showToast('Please login to place your order.', 'info');

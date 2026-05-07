@@ -8,9 +8,138 @@ function fe_h(string $value): string
 }
 
 $db = get_db_connection();
+$heroSlides = [];
+$heroResult = $db->query(
+    "SELECT id, title, subtitle, button_text, button_link, image
+     FROM hero_sections
+     WHERE is_active = 1
+     ORDER BY sort_order ASC, id DESC"
+);
+if ($heroResult instanceof mysqli_result) {
+    while ($row = $heroResult->fetch_assoc()) {
+        $heroSlides[] = $row;
+    }
+    $heroResult->free();
+}
+if ($heroSlides === []) {
+    $heroSlides = [
+        [
+            'id' => 1,
+            'title' => 'Tones of Shop UI Features Designed',
+            'subtitle' => 'Lorem ipsum dolor sit amet constectetuer diam adipiscing elit euismod ut laoreet dolore.',
+            'button_text' => 'Shop Now',
+            'button_link' => '#featured-products',
+            'image' => 'assets/pages/img/shop-slider/slide1/bg.jpg',
+        ],
+        [
+            'id' => 2,
+            'title' => 'Unlimited Layout Options',
+            'subtitle' => 'Build your storefront quickly with reusable components and production-ready layout blocks.',
+            'button_text' => 'Shop Now',
+            'button_link' => '#featured-products',
+            'image' => 'assets/pages/img/shop-slider/slide2/bg.jpg',
+        ],
+    ];
+}
 $selectedCategory = trim((string) ($_GET['category'] ?? ''));
 $selectedCategoryName = 'All Products';
 $catalogProducts = [];
+$categoryTree = [];
+$categoriesById = [];
+$categoriesBySlug = [];
+$selectedCategoryId = 0;
+$selectedCategorySlug = '';
+$selectedCategoryIds = [];
+$sort = trim((string) ($_GET['sort'] ?? 'latest'));
+$show = (int) ($_GET['show'] ?? 24);
+$page = (int) ($_GET['page'] ?? 1);
+if (!in_array($show, [12, 24, 48, 96], true)) {
+    $show = 24;
+}
+if ($page < 1) {
+    $page = 1;
+}
+
+function category_slug_or_id(array $category): string
+{
+    $slug = trim((string) ($category['slug'] ?? ''));
+    if ($slug !== '') {
+        return $slug;
+    }
+    return (string) ((int) ($category['id'] ?? 0));
+}
+
+function collect_child_ids(array $treeByParent, int $parentId): array
+{
+    $ids = [$parentId];
+    $children = $treeByParent[$parentId] ?? [];
+    foreach ($children as $child) {
+        $childId = (int) ($child['id'] ?? 0);
+        if ($childId > 0) {
+            $ids = array_merge($ids, collect_child_ids($treeByParent, $childId));
+        }
+    }
+    return $ids;
+}
+
+function render_category_sidebar(array $treeByParent, int $parentId, int $selectedId): void
+{
+    $children = $treeByParent[$parentId] ?? [];
+    if ($children === []) {
+        return;
+    }
+    foreach ($children as $node) {
+        $id = (int) ($node['id'] ?? 0);
+        $name = trim((string) ($node['name'] ?? 'Category'));
+        $isActive = $id === $selectedId;
+        echo '<li class="list-group-item clearfix' . ($isActive ? ' active' : '') . '">';
+        echo '<a href="shop-product-list.php?category=' . rawurlencode(category_slug_or_id($node)) . '"><i class="fa fa-angle-right"></i> ' . fe_h($name) . '</a>';
+        if (!empty($treeByParent[$id])) {
+            echo '<ul class="dropdown-menu" style="display:block;">';
+            render_category_sidebar($treeByParent, $id, $selectedId);
+            echo '</ul>';
+        }
+        echo '</li>';
+    }
+}
+
+$categoryResult = $db->query(
+    "SELECT id, name, slug, parent_id
+     FROM categories
+     WHERE is_active = 1
+     ORDER BY COALESCE(parent_id, 0) ASC, name ASC"
+);
+if ($categoryResult instanceof mysqli_result) {
+    while ($row = $categoryResult->fetch_assoc()) {
+        $id = (int) ($row['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        $categoriesById[$id] = $row;
+        $slugKey = strtolower(trim((string) ($row['slug'] ?? '')));
+        if ($slugKey !== '') {
+            $categoriesBySlug[$slugKey] = $id;
+        }
+        $parentId = (int) ($row['parent_id'] ?? 0);
+        $categoryTree[$parentId][] = $row;
+    }
+    $categoryResult->free();
+}
+
+if ($selectedCategory !== '') {
+    if (ctype_digit($selectedCategory)) {
+        $selectedCategoryId = (int) $selectedCategory;
+    } else {
+        $lookup = strtolower($selectedCategory);
+        $selectedCategoryId = (int) ($categoriesBySlug[$lookup] ?? 0);
+    }
+}
+if ($selectedCategoryId > 0 && isset($categoriesById[$selectedCategoryId])) {
+    $selectedCategoryName = (string) ($categoriesById[$selectedCategoryId]['name'] ?? 'All Products');
+    $selectedCategorySlug = category_slug_or_id($categoriesById[$selectedCategoryId]);
+    $selectedCategoryIds = array_values(array_unique(array_map('intval', collect_child_ids($categoryTree, $selectedCategoryId))));
+}
+
 $hasImageField = true;
 $testImageSql = $db->query("SHOW COLUMNS FROM products LIKE 'image_path'");
 if (!$testImageSql instanceof mysqli_result || $testImageSql->num_rows === 0) {
@@ -22,36 +151,46 @@ if ($testImageSql instanceof mysqli_result) {
 
 $imageField = $hasImageField ? 'p.image_path' : "'' AS image_path";
 $whereSql = 'p.is_active = 1';
-$bindType = '';
-$bindValue = '';
-
-if ($selectedCategory !== '') {
-    if (ctype_digit($selectedCategory)) {
-        $whereSql .= ' AND c.id = ?';
-        $bindType = 'i';
-        $bindValue = (string) ((int) $selectedCategory);
-    } else {
-        $whereSql .= ' AND c.slug = ?';
-        $bindType = 's';
-        $bindValue = $selectedCategory;
-    }
+if ($selectedCategoryIds !== []) {
+    $whereSql .= ' AND p.category_id IN (' . implode(',', array_map('intval', $selectedCategoryIds)) . ')';
 }
 
-$sql = "SELECT p.id, p.name, {$imageField}, p.price, p.stock_qty, c.name AS category_name
+$orderSql = 'p.id DESC';
+if ($sort === 'name_asc') {
+    $orderSql = 'p.name ASC';
+} elseif ($sort === 'name_desc') {
+    $orderSql = 'p.name DESC';
+} elseif ($sort === 'price_asc') {
+    $orderSql = 'p.price ASC';
+} elseif ($sort === 'price_desc') {
+    $orderSql = 'p.price DESC';
+}
+
+$countSql = "SELECT COUNT(*) AS total_rows
+             FROM products p
+             WHERE {$whereSql}";
+$totalRows = 0;
+$countResult = $db->query($countSql);
+if ($countResult instanceof mysqli_result) {
+    $countRow = $countResult->fetch_assoc();
+    $totalRows = (int) ($countRow['total_rows'] ?? 0);
+    $countResult->free();
+}
+$totalPages = max(1, (int) ceil($totalRows / $show));
+if ($page > $totalPages) {
+    $page = $totalPages;
+}
+$offset = max(0, ($page - 1) * $show);
+
+$sql = "SELECT p.id, p.name, {$imageField}, p.price, p.stock_qty, c.name AS category_name, c.slug AS category_slug
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         WHERE {$whereSql}
-        ORDER BY p.id DESC";
+        ORDER BY {$orderSql}
+        LIMIT {$show} OFFSET {$offset}";
 
 $stmt = $db->prepare($sql);
 if ($stmt) {
-    if ($bindType === 'i') {
-        $bindInt = (int) $bindValue;
-        $stmt->bind_param('i', $bindInt);
-    } elseif ($bindType === 's') {
-        $bindStr = $bindValue;
-        $stmt->bind_param('s', $bindStr);
-    }
     $stmt->execute();
     $catalogResult = $stmt->get_result();
     if ($catalogResult instanceof mysqli_result) {
@@ -63,9 +202,30 @@ if ($stmt) {
     $stmt->close();
 }
 
-if ($selectedCategory !== '' && $catalogProducts !== []) {
-    $selectedCategoryName = (string) ($catalogProducts[0]['category_name'] ?? 'All Products');
+$bestsellers = [];
+$bestsellerWhere = 'p.is_active = 1';
+if ($selectedCategoryIds !== []) {
+    $bestsellerWhere .= ' AND p.category_id IN (' . implode(',', array_map('intval', $selectedCategoryIds)) . ')';
 }
+$bestsellerSql = "SELECT p.id, p.name, {$imageField}, p.price
+                  FROM products p
+                  WHERE {$bestsellerWhere}
+                  ORDER BY p.id DESC
+                  LIMIT 3";
+$bestsellerResult = $db->query($bestsellerSql);
+if ($bestsellerResult instanceof mysqli_result) {
+    while ($row = $bestsellerResult->fetch_assoc()) {
+        $bestsellers[] = $row;
+    }
+    $bestsellerResult->free();
+}
+
+$pageBaseParams = ['sort' => $sort, 'show' => $show];
+if ($selectedCategorySlug !== '') {
+    $pageBaseParams['category'] = $selectedCategorySlug;
+}
+$firstItem = $totalRows > 0 ? ($offset + 1) : 0;
+$lastItem = min($totalRows, $offset + $show);
 ?>
 <!DOCTYPE html>
 <!--
@@ -115,6 +275,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
   <!-- Global styles END --> 
    
   <!-- Page level plugin styles START -->
+  <link href="assets/pages/css/animate.css" rel="stylesheet">
   <link href="assets/plugins/fancybox/source/jquery.fancybox.css" rel="stylesheet">
   <link href="assets/plugins/owl.carousel/assets/owl.carousel.css" rel="stylesheet">
   <link href="assets/plugins/uniform/css/uniform.default.css" rel="stylesheet" type="text/css">
@@ -124,6 +285,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
 
   <!-- Theme styles START -->
   <link href="assets/pages/css/components.css" rel="stylesheet">
+  <link href="assets/pages/css/slider.css" rel="stylesheet">
   <link href="assets/corporate/css/style.css" rel="stylesheet">
   <link href="assets/pages/css/style-shop.css" rel="stylesheet" type="text/css">
   <link href="assets/corporate/css/style-responsive.css" rel="stylesheet">
@@ -137,19 +299,13 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
 <!-- Body BEGIN -->
 <body class="ecommerce">
     <?php require_once __DIR__ . '/includes/shop-header.php'; ?>
-
-    <div class="title-wrapper">
-      <div class="container"><div class="container-inner">
-        <h1><span><?php echo fe_h(strtoupper($selectedCategoryName)); ?></span> CATEGORY</h1>
-        <em>Over 4000 Items are available here</em>
-      </div></div>
-    </div>
+    <?php require_once __DIR__ . '/includes/shop-hero.php'; ?>
 
     <div class="main shop-main-content">
       <div class="container">
         <ul class="breadcrumb">
             <li><a href="shop-index.php">Home</a></li>
-            <li><a href="">Store</a></li>
+            <li><a href="shop-index.php">Store</a></li>
             <li class="active"><?php echo fe_h($selectedCategoryName); ?></li>
         </ul>
         <!-- BEGIN SIDEBAR & CONTENT -->
@@ -157,81 +313,34 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
           <!-- BEGIN SIDEBAR -->
           <div class="sidebar col-md-3 col-sm-5">
             <ul class="list-group margin-bottom-25 sidebar-menu">
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Ladies</a></li>
-              <li class="list-group-item clearfix dropdown active">
-                <a href="javascript:void(0);" class="collapsed">
-                  <i class="fa fa-angle-right"></i>
-                  Mens
-                  
-                </a>
-                <ul class="dropdown-menu" style="display:block;">
-                  <li class="list-group-item dropdown clearfix active">
-                    <a href="javascript:void(0);" class="collapsed"><i class="fa fa-angle-right"></i> Shoes </a>
-                      <ul class="dropdown-menu" style="display:block;">
-                        <li class="list-group-item dropdown clearfix">
-                          <a href="javascript:void(0);"><i class="fa fa-angle-right"></i> Classic </a>
-                          <ul class="dropdown-menu">
-                            <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Classic 1</a></li>
-                            <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Classic 2</a></li>
-                          </ul>
-                        </li>
-                        <li class="list-group-item dropdown clearfix active">
-                          <a href="javascript:void(0);" class="collapsed"><i class="fa fa-angle-right"></i> Sport  </a>
-                          <ul class="dropdown-menu" style="display:block;">
-                            <li class="active"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Sport 1</a></li>
-                            <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Sport 2</a></li>
-                          </ul>
-                        </li>
-                      </ul>
-                  </li>
-                  <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Trainers</a></li>
-                  <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Jeans</a></li>
-                  <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Chinos</a></li>
-                  <li><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> T-Shirts</a></li>
-                </ul>
+              <li class="list-group-item clearfix <?php echo $selectedCategoryId === 0 ? 'active' : ''; ?>">
+                <a href="shop-product-list.php"><i class="fa fa-angle-right"></i> All Products</a>
               </li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Kids</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Accessories</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Sports</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Brands</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Electronics</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Home & Garden</a></li>
-              <li class="list-group-item clearfix"><a href="shop-product-list.php"><i class="fa fa-angle-right"></i> Custom Link</a></li>
+              <?php render_category_sidebar($categoryTree, 0, $selectedCategoryId); ?>
             </ul>
 
-            <div class="sidebar-filter margin-bottom-25">
-              <h2>Filter</h2>
-              <h3>Availability</h3>
-              <div class="checkbox-list">
-                <label><input type="checkbox" name="checkbox_0"> Not Available (3)</label>
-                <label><input type="checkbox" name="checkbox_0"> In Stock (26)</label>
-              </div>
-
-              <h3>Price</h3>
-              <p>
-                <label for="amount">Range:</label>
-                <input type="text" id="amount" style="border:0; color:#f6931f; font-weight:bold;" name="amount">
-              </p>
-              <div id="slider-range"></div>
+            <div class="margin-bottom-25">
+              <div
+                class="sidebar-filter"
+                data-filter-title="Filter"
+                data-filter-all-categories-label="All Categories"
+              ></div>
             </div>
 
             <div class="sidebar-products clearfix">
               <h2>Bestsellers</h2>
-              <div class="item">
-                <a href="shop-item.php"><img src="assets/pages/img/products/k1.jpg" alt="Some Shoes in Animal with Cut Out"></a>
-                <h3><a href="shop-item.php">Some Shoes in Animal with Cut Out</a></h3>
-                <div class="price">INR 31.00</div>
-              </div>
-              <div class="item">
-                <a href="shop-item.php"><img src="assets/pages/img/products/k4.jpg" alt="Some Shoes in Animal with Cut Out"></a>
-                <h3><a href="shop-item.php">Some Shoes in Animal with Cut Out</a></h3>
-                <div class="price">INR 23.00</div>
-              </div>
-              <div class="item">
-                <a href="shop-item.php"><img src="assets/pages/img/products/k3.jpg" alt="Some Shoes in Animal with Cut Out"></a>
-                <h3><a href="shop-item.php">Some Shoes in Animal with Cut Out</a></h3>
-                <div class="price">INR 86.00</div>
-              </div>
+              <?php if ($bestsellers === []): ?>
+                <p>No bestselling products available right now.</p>
+              <?php else: ?>
+                <?php foreach ($bestsellers as $best): ?>
+                  <?php $bestImg = trim((string) ($best['image_path'] ?? '')) !== '' ? (string) $best['image_path'] : 'assets/pages/img/products/model1.jpg'; ?>
+                  <div class="item">
+                    <a href="shop-item.php?id=<?php echo (int) ($best['id'] ?? 0); ?>"><img src="<?php echo fe_h($bestImg); ?>" alt="<?php echo fe_h((string) ($best['name'] ?? 'Product')); ?>"></a>
+                    <h3><a href="shop-item.php?id=<?php echo (int) ($best['id'] ?? 0); ?>"><?php echo fe_h((string) ($best['name'] ?? 'Product')); ?></a></h3>
+                    <div class="price">₹ <?php echo number_format((float) ($best['price'] ?? 0), 2); ?></div>
+                  </div>
+                <?php endforeach; ?>
+              <?php endif; ?>
             </div>
           </div>
           <!-- END SIDEBAR -->
@@ -245,26 +354,20 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
               <div class="col-md-10 col-sm-10">
                 <div class="pull-right">
                   <label class="control-label">Show:</label>
-                  <select class="form-control input-sm" name="field_0">
-                    <option value="#?limit=24" selected="selected">24</option>
-                    <option value="#?limit=25">25</option>
-                    <option value="#?limit=50">50</option>
-                    <option value="#?limit=75">75</option>
-                    <option value="#?limit=100">100</option>
+                  <select class="form-control input-sm" id="catalog-show">
+                    <?php foreach ([12, 24, 48, 96] as $showOption): ?>
+                      <option value="<?php echo $showOption; ?>" <?php echo $show === $showOption ? 'selected' : ''; ?>><?php echo $showOption; ?></option>
+                    <?php endforeach; ?>
                   </select>
                 </div>
                 <div class="pull-right">
                   <label class="control-label">Sort&nbsp;By:</label>
-                  <select class="form-control input-sm" name="field_0">
-                    <option value="#?sort=p.sort_order&amp;order=ASC" selected="selected">Default</option>
-                    <option value="#?sort=pd.name&amp;order=ASC">Name (A - Z)</option>
-                    <option value="#?sort=pd.name&amp;order=DESC">Name (Z - A)</option>
-                    <option value="#?sort=p.price&amp;order=ASC">Price (Low &gt; High)</option>
-                    <option value="#?sort=p.price&amp;order=DESC">Price (High &gt; Low)</option>
-                    <option value="#?sort=rating&amp;order=DESC">Rating (Highest)</option>
-                    <option value="#?sort=rating&amp;order=ASC">Rating (Lowest)</option>
-                    <option value="#?sort=p.model&amp;order=ASC">Model (A - Z)</option>
-                    <option value="#?sort=p.model&amp;order=DESC">Model (Z - A)</option>
+                  <select class="form-control input-sm" id="catalog-sort">
+                    <option value="latest" <?php echo $sort === 'latest' ? 'selected' : ''; ?>>Default</option>
+                    <option value="name_asc" <?php echo $sort === 'name_asc' ? 'selected' : ''; ?>>Name (A - Z)</option>
+                    <option value="name_desc" <?php echo $sort === 'name_desc' ? 'selected' : ''; ?>>Name (Z - A)</option>
+                    <option value="price_asc" <?php echo $sort === 'price_asc' ? 'selected' : ''; ?>>Price (Low &gt; High)</option>
+                    <option value="price_desc" <?php echo $sort === 'price_desc' ? 'selected' : ''; ?>>Price (High &gt; Low)</option>
                   </select>
                 </div>
               </div>
@@ -288,7 +391,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                         </div>
                       </div>
                       <h3><a href="shop-item.php?id=<?php echo (int) $product['id']; ?>"><?php echo fe_h((string) $product['name']); ?></a></h3>
-                      <div class="pi-price">$<?php echo number_format((float) $product['price'], 2); ?></div>
+                      <div class="pi-price">₹ <?php echo number_format((float) $product['price'], 2); ?></div>
                       <p class="product-meta"><?php echo fe_h($categoryName); ?> | <?php echo (int) $product['stock_qty'] > 0 ? 'In Stock' : 'Out of Stock'; ?></p>
                       <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo (int) $product['id']; ?>">Add to cart</button>
                       <a href="shop-item.php?id=<?php echo (int) $product['id']; ?>" class="btn btn-default">Details</a>
@@ -302,16 +405,28 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
 
             <!-- BEGIN PAGINATOR -->
             <div class="row">
-              <div class="col-md-4 col-sm-4 items-info">Items 1 to 9 of 10 total</div>
+              <div class="col-md-4 col-sm-4 items-info">Items <?php echo $firstItem; ?> to <?php echo $lastItem; ?> of <?php echo $totalRows; ?> total</div>
               <div class="col-md-8 col-sm-8">
                 <ul class="pagination pull-right">
-                  <li><a href="javascript:;">&laquo;</a></li>
-                  <li><a href="javascript:;">1</a></li>
-                  <li><span>2</span></li>
-                  <li><a href="javascript:;">3</a></li>
-                  <li><a href="javascript:;">4</a></li>
-                  <li><a href="javascript:;">5</a></li>
-                  <li><a href="javascript:;">&raquo;</a></li>
+                  <?php
+                  $prevPage = max(1, $page - 1);
+                  $nextPage = min($totalPages, $page + 1);
+                  $windowStart = max(1, $page - 2);
+                  $windowEnd = min($totalPages, $page + 2);
+                  ?>
+                  <li class="<?php echo $page <= 1 ? 'disabled' : ''; ?>">
+                    <a href="<?php echo $page <= 1 ? 'javascript:;' : ('?' . http_build_query(array_merge($pageBaseParams, ['page' => $prevPage]))); ?>">&laquo;</a>
+                  </li>
+                  <?php for ($p = $windowStart; $p <= $windowEnd; $p++): ?>
+                    <?php if ($p === $page): ?>
+                      <li><span><?php echo $p; ?></span></li>
+                    <?php else: ?>
+                      <li><a href="?<?php echo http_build_query(array_merge($pageBaseParams, ['page' => $p])); ?>"><?php echo $p; ?></a></li>
+                    <?php endif; ?>
+                  <?php endfor; ?>
+                  <li class="<?php echo $page >= $totalPages ? 'disabled' : ''; ?>">
+                    <a href="<?php echo $page >= $totalPages ? 'javascript:;' : ('?' . http_build_query(array_merge($pageBaseParams, ['page' => $nextPage]))); ?>">&raquo;</a>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -344,8 +459,8 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   <h1>Cool green dress with red bell</h1>
                   <div class="price-availability-block clearfix">
                     <div class="price">
-                      <strong><span>$</span>47.00</strong>
-                      <em>$<span>62.00</span></em>
+                      <strong><span>₹</span>47.00</strong>
+                      <em>₹<span>62.00</span></em>
                     </div>
                     <div class="availability">
                       Availability: <strong>In Stock</strong>
@@ -418,6 +533,24 @@ Nostrud duis molestie at dolore.</p>
             Layout.initTwitter();
             Layout.initImageZoom();
             Layout.initTouchspin();
+            var sortSel = document.getElementById('catalog-sort');
+            var showSel = document.getElementById('catalog-show');
+            function applyCatalogParams() {
+              if (!sortSel || !showSel) {
+                return;
+              }
+              var params = new URLSearchParams(window.location.search || '');
+              params.set('sort', sortSel.value);
+              params.set('show', showSel.value);
+              params.set('page', '1');
+              window.location.search = params.toString();
+            }
+            if (sortSel) {
+              sortSel.addEventListener('change', applyCatalogParams);
+            }
+            if (showSel) {
+              showSel.addEventListener('change', applyCatalogParams);
+            }
             Layout.initUniform();
             Layout.initSliderRange();
         });

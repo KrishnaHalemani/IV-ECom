@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/../mail/order-mailer.php';
 
 $db = get_db_connection();
 ensure_admin_tables($db);
@@ -525,13 +526,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $sku = trim((string) ($_POST['sku'] ?? ''));
             $categoryId = (int) ($_POST['category_id'] ?? 0);
             $price = (float) ($_POST['price'] ?? 0);
+            $comparePrice = (float) ($_POST['compare_price'] ?? 0);
             $stock = (int) ($_POST['stock_qty'] ?? 0);
             $description = trim((string) ($_POST['description'] ?? ''));
             $selectedSizesRaw = $_POST['available_sizes'] ?? [];
             $colorNamesRaw = $_POST['color_names'] ?? [];
             $colorAllSizesRaw = $_POST['color_all_sizes'] ?? [];
             $colorSizesRaw = $_POST['color_sizes'] ?? [];
-            $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $isActive = 1;
             $displaySection = normalize_display_section((string) ($_POST['display_section'] ?? 'home'));
             $displayFlags = display_section_flags($displaySection);
             $isFeatured = (int) $displayFlags['is_featured'];
@@ -637,11 +639,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             } else {
                 $cat = $categoryId > 0 ? $categoryId : null;
                 $stmt = $db->prepare(
-                    'INSERT INTO products (category_id, name, sku, image_path, description, price, stock_qty, is_active, is_featured, is_new, display_section, size_options, color_options, gallery_images_json, color_image_map_json)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO products (category_id, name, sku, image_path, description, price, compare_price, stock_qty, is_active, is_featured, is_new, display_section, size_options, color_options, gallery_images_json, color_image_map_json)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 if ($stmt) {
-                    $stmt->bind_param('issssdiiiisssss', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $isFeatured, $isNew, $displaySection, $sizeOptions, $colorOptions, $galleryImagesJson, $colorImageMapJson);
+                    $stmt->bind_param('issssddiiiisssss', $cat, $name, $sku, $imagePath, $description, $price, $comparePrice, $stock, $isActive, $isFeatured, $isNew, $displaySection, $sizeOptions, $colorOptions, $galleryImagesJson, $colorImageMapJson);
                     $ok = $stmt->execute();
                     $stmt->close();
                     admin_flash_set($ok ? 'Product added.' : 'Could not add product (SKU must be unique).', $ok ? 'success' : 'error');
@@ -653,6 +655,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $sku = trim((string) ($_POST['sku'] ?? ''));
             $categoryId = (int) ($_POST['category_id'] ?? 0);
             $price = (float) ($_POST['price'] ?? 0);
+            $comparePrice = (float) ($_POST['compare_price'] ?? 0);
             $stock = (int) ($_POST['stock_qty'] ?? 0);
             $description = trim((string) ($_POST['description'] ?? ''));
             $sizeOptions = parse_option_values((string) ($_POST['size_options'] ?? ''));
@@ -681,11 +684,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 $cat = $categoryId > 0 ? $categoryId : null;
                 $stmt = $db->prepare(
                     'UPDATE products
-                     SET category_id = ?, name = ?, sku = ?, image_path = ?, description = ?, price = ?, stock_qty = ?, is_active = ?, is_featured = ?, is_new = ?, display_section = ?, size_options = ?, color_options = ?, gallery_images_json = ?, color_image_map_json = ?
+                     SET category_id = ?, name = ?, sku = ?, image_path = ?, description = ?, price = ?, compare_price = ?, stock_qty = ?, is_active = ?, is_featured = ?, is_new = ?, display_section = ?, size_options = ?, color_options = ?, gallery_images_json = ?, color_image_map_json = ?
                      WHERE id = ?'
                 );
                 if ($stmt) {
-                    $stmt->bind_param('issssdiiiisssssi', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $isFeatured, $isNew, $displaySection, $sizeOptions, $colorOptions, $galleryImagesJson, $colorImageMapJson, $id);
+                    $stmt->bind_param('issssddiiiisssssi', $cat, $name, $sku, $imagePath, $description, $price, $comparePrice, $stock, $isActive, $isFeatured, $isNew, $displaySection, $sizeOptions, $colorOptions, $galleryImagesJson, $colorImageMapJson, $id);
                     $ok = $stmt->execute();
                     $stmt->close();
                     admin_flash_set($ok ? 'Product updated.' : 'Could not update product.', $ok ? 'success' : 'error');
@@ -765,11 +768,28 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $id = (int) ($_POST['id'] ?? 0);
             $status = (string) ($_POST['status'] ?? 'pending');
             if ($id > 0) {
+                $oldStatus = '';
+                $oldStmt = $db->prepare('SELECT status FROM orders WHERE id = ? LIMIT 1');
+                if ($oldStmt) {
+                    $oldStmt->bind_param('i', $id);
+                    $oldStmt->execute();
+                    $oldRes = $oldStmt->get_result();
+                    if ($oldRes instanceof mysqli_result) {
+                        $oldRow = $oldRes->fetch_assoc();
+                        $oldStatus = strtolower(trim((string) ($oldRow['status'] ?? '')));
+                        $oldRes->free();
+                    }
+                    $oldStmt->close();
+                }
+
                 $stmt = $db->prepare('UPDATE orders SET status = ? WHERE id = ?');
                 if ($stmt) {
                     $stmt->bind_param('si', $status, $id);
                     $ok = $stmt->execute();
                     $stmt->close();
+                    if ($ok && strtolower(trim($status)) !== $oldStatus) {
+                        sendOrderStatusUpdate($id, $status);
+                    }
                     admin_flash_set($ok ? 'Order status updated.' : 'Could not update status.', $ok ? 'success' : 'error');
                 }
             }
@@ -1093,7 +1113,7 @@ if ($categoriesResult instanceof mysqli_result) {
 $categoryOptionRows = build_category_option_rows($categoriesData, true);
 
 $products = $db->query(
-    'SELECT p.id, p.name, p.sku, p.image_path, p.price, p.stock_qty, p.is_active, p.is_featured, p.is_new, p.display_section, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.description, p.created_at, p.category_id, c.name AS category_name
+    'SELECT p.id, p.name, p.sku, p.image_path, p.price, p.compare_price, p.stock_qty, p.is_active, p.is_featured, p.is_new, p.display_section, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.description, p.created_at, p.category_id, c.name AS category_name
      FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
      ORDER BY p.id DESC'
@@ -1336,10 +1356,8 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
               </select>
             </div>
             <div><input type="number" step="0.01" name="price" placeholder="Price" required></div>
+            <div><input type="number" step="0.01" name="compare_price" placeholder="Old/Strikethrough price (optional)" value="0"></div>
             <div><input type="number" name="stock_qty" placeholder="Stock" value="0" required></div>
-            <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
-            <div><input type="file" name="gallery_files[]" accept=".jpg,.jpeg,.png,.gif,.webp" multiple></div>
-            <div><label><input type="checkbox" name="is_active" checked aria-label="Active"></label></div>
             <div>
               <select name="display_section">
                 <option value="home"><?php echo admin_h($homeSectionLabel); ?></option>
@@ -1362,7 +1380,7 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
           </div>
           <div class="mt">
             <label for="color_count">Step 2: How many colors?</label>
-            <input type="number" id="color_count" min="1" max="20" value="1" placeholder="Enter number of colors">
+            <input type="text" id="color_count" inputmode="numeric" value="1" placeholder="Enter number of colors (you can type manually)">
           </div>
           <div class="mt" id="color-variant-builder"></div>
           <div class="mt">
@@ -1399,6 +1417,7 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
                         </select>
                       </div>
                       <div><input type="number" step="0.01" name="price" value="<?php echo admin_h((string) $row['price']); ?>" required></div>
+                      <div><input type="number" step="0.01" name="compare_price" value="<?php echo admin_h((string) ($row['compare_price'] ?? '0')); ?>" placeholder="Old/Strikethrough price"></div>
                       <div><input type="number" name="stock_qty" value="<?php echo (int) $row['stock_qty']; ?>" required></div>
                       <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
                       <div><input type="file" name="gallery_files[]" accept=".jpg,.jpeg,.png,.gif,.webp" multiple></div>
