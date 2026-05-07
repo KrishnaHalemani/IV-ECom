@@ -65,6 +65,15 @@ switch ($action) {
         $response = createOrderFromCart($userId);
         break;
 
+    case 'apply_coupon':
+        $couponCode = trim((string) ($_REQUEST['coupon_code'] ?? ''));
+        $response = cartApplyCoupon($couponCode);
+        break;
+
+    case 'remove_coupon':
+        $response = cartRemoveCoupon();
+        break;
+
     case 'auth':
     case 'auth_summary':
         $response = ['success' => true, 'message' => 'Auth loaded.'];

@@ -179,6 +179,38 @@ function ensure_admin_tables(mysqli $db): void
         $displaySectionCheck->free();
     }
 
+    $sizeOptionsCheck = $db->query("SHOW COLUMNS FROM products LIKE 'size_options'");
+    if ($sizeOptionsCheck instanceof mysqli_result && $sizeOptionsCheck->num_rows === 0) {
+        $db->query("ALTER TABLE products ADD COLUMN size_options TEXT NULL AFTER display_section");
+    }
+    if ($sizeOptionsCheck instanceof mysqli_result) {
+        $sizeOptionsCheck->free();
+    }
+
+    $colorOptionsCheck = $db->query("SHOW COLUMNS FROM products LIKE 'color_options'");
+    if ($colorOptionsCheck instanceof mysqli_result && $colorOptionsCheck->num_rows === 0) {
+        $db->query("ALTER TABLE products ADD COLUMN color_options TEXT NULL AFTER size_options");
+    }
+    if ($colorOptionsCheck instanceof mysqli_result) {
+        $colorOptionsCheck->free();
+    }
+
+    $galleryImagesCheck = $db->query("SHOW COLUMNS FROM products LIKE 'gallery_images_json'");
+    if ($galleryImagesCheck instanceof mysqli_result && $galleryImagesCheck->num_rows === 0) {
+        $db->query("ALTER TABLE products ADD COLUMN gallery_images_json LONGTEXT NULL AFTER color_options");
+    }
+    if ($galleryImagesCheck instanceof mysqli_result) {
+        $galleryImagesCheck->free();
+    }
+
+    $colorImageMapCheck = $db->query("SHOW COLUMNS FROM products LIKE 'color_image_map_json'");
+    if ($colorImageMapCheck instanceof mysqli_result && $colorImageMapCheck->num_rows === 0) {
+        $db->query("ALTER TABLE products ADD COLUMN color_image_map_json LONGTEXT NULL AFTER gallery_images_json");
+    }
+    if ($colorImageMapCheck instanceof mysqli_result) {
+        $colorImageMapCheck->free();
+    }
+
     $userGoogleIdCheck = $db->query("SHOW COLUMNS FROM users LIKE 'google_id'");
     if ($userGoogleIdCheck instanceof mysqli_result && $userGoogleIdCheck->num_rows === 0) {
         $db->query("ALTER TABLE users ADD COLUMN google_id VARCHAR(191) NULL AFTER email");

@@ -1,4 +1,4 @@
-(function (window, document, $) {
+﻿(function (window, document, $) {
   'use strict';
 
   if (!$) {
@@ -8,8 +8,12 @@
   var cartState = {
     count: 0,
     subtotal: 0,
+    discount: 0,
+    total: 0,
+    coupon: null,
     items: []
   };
+  var RUPEE = '\u20B9';
   var authState = {
     logged_in: false,
     user_id: 0,
@@ -34,7 +38,7 @@
   }
 
   function formatPrice(value) {
-    return 'INR ' + Number(value || 0).toFixed(2);
+    return RUPEE + ' ' + Number(value || 0).toFixed(2);
   }
 
   function escapeHtml(value) {
@@ -86,6 +90,14 @@
     if (cartBlock && cartBlock.parentNode) {
       cartBlock.parentNode.insertBefore(wrapper, cartBlock);
     }
+
+    if (cartBlock && cartBlock.parentNode && !document.querySelector('.shop-orders-link')) {
+      var ordersLink = document.createElement('a');
+      ordersLink.className = 'btn btn-default shop-orders-link';
+      ordersLink.href = (authState.account_url || 'account.php') + '#orders';
+      ordersLink.innerHTML = '<i class="fa fa-truck"></i> My Orders';
+      cartBlock.parentNode.insertBefore(ordersLink, cartBlock);
+    }
   }
 
   function applyAuthState(auth) {
@@ -126,12 +138,23 @@
       if (authState.logged_in) {
         list.innerHTML = '' +
           '<li><a href="' + escapeHtml(authState.account_url || 'account.php') + '">My Account</a></li>' +
+          '<li><a href="' + escapeHtml((authState.account_url || 'account.php') + '#orders') + '">My Orders</a></li>' +
           '<li><a href="shop-shopping-cart.php">Cart</a></li>' +
           '<li><a href="' + escapeHtml(authState.logout_url || 'user-logout.php') + '">Logout</a></li>';
       } else {
         list.innerHTML = '' +
           '<li><a href="' + escapeHtml(authState.login_url || 'login.php') + '">Login</a></li>' +
           '<li><a href="' + escapeHtml(authState.register_url || 'register.php') + '">Register</a></li>';
+      }
+    }
+
+    var ordersBtn = document.querySelector('.shop-orders-link');
+    if (ordersBtn) {
+      if (authState.logged_in) {
+        ordersBtn.style.display = 'inline-block';
+        ordersBtn.setAttribute('href', (authState.account_url || 'account.php') + '#orders');
+      } else {
+        ordersBtn.style.display = 'none';
       }
     }
   }
@@ -223,6 +246,9 @@
   function applyCartState(cart) {
     cartState.count = Number(cart.count || 0);
     cartState.subtotal = Number(cart.subtotal || 0);
+    cartState.discount = Number(cart.discount || 0);
+    cartState.total = Number(typeof cart.total !== 'undefined' ? cart.total : cartState.subtotal);
+    cartState.coupon = cart && cart.coupon ? cart.coupon : null;
     cartState.items = Array.isArray(cart.items) ? cart.items : [];
 
     var countEl = document.querySelector('.top-cart-info-count');
@@ -264,7 +290,7 @@
     var summaryHtml = '<li class="top-cart-summary" style="padding:10px 0 12px;border-bottom:1px solid #e9edf1;margin-bottom:6px;">' +
       '<strong>' + cartState.count + (cartState.count === 1 ? ' item' : ' items') + '</strong> | ' +
       '<strong>' + formatPrice(cartState.subtotal) + '</strong> | ' +
-      '<strong>INR ' + Number(cartState.subtotal || 0).toFixed(2) + '</strong>' +
+      '<strong>' + RUPEE + ' ' + Number(cartState.subtotal || 0).toFixed(2) + '</strong>' +
       '</li>';
 
     if (!cartState.items.length) {
@@ -320,8 +346,8 @@
           '<td class="goods-page-description"><h3><a href="' + escapeHtml(item.item_url) + '">' + escapeHtml(item.name) + '</a></h3><em>In cart</em></td>' +
           '<td class="goods-page-ref-no">' + escapeHtml(item.sku || ('SKU-' + item.id)) + '</td>' +
           '<td class="goods-page-quantity"><div class="shop-qty-control"><button type="button" class="js-cart-page-qty" data-step="-1" data-product-id="' + escapeHtml(item.id) + '">-</button><span>' + escapeHtml(item.qty) + '</span><button type="button" class="js-cart-page-qty" data-step="1" data-product-id="' + escapeHtml(item.id) + '">+</button></div></td>' +
-          '<td class="goods-page-price"><strong><span>$</span>' + Number(item.price || 0).toFixed(2) + '</strong></td>' +
-          '<td class="goods-page-total"><strong><span>$</span>' + Number(item.subtotal || 0).toFixed(2) + '</strong></td>' +
+          '<td class="goods-page-price"><strong><span>' + RUPEE + '</span>' + Number(item.price || 0).toFixed(2) + '</strong></td>' +
+          '<td class="goods-page-total"><strong><span>' + RUPEE + '</span>' + Number(item.subtotal || 0).toFixed(2) + '</strong></td>' +
           '<td class="del-goods-col"><a class="del-goods js-cart-remove" href="javascript:void(0);" data-product-id="' + escapeHtml(item.id) + '">&nbsp;</a></td>';
         table.appendChild(row);
       }
@@ -329,9 +355,9 @@
 
     var totals = page.querySelectorAll('.shopping-total .price');
     if (totals.length >= 3) {
-      totals[0].innerHTML = '<span>$</span>' + cartState.subtotal.toFixed(2);
-      totals[1].innerHTML = '<span>$</span>0.00';
-      totals[2].innerHTML = '<span>$</span>' + cartState.subtotal.toFixed(2);
+      totals[0].innerHTML = '<span>' + RUPEE + '</span>' + cartState.subtotal.toFixed(2);
+      totals[1].innerHTML = '<span>' + RUPEE + '</span>0.00';
+      totals[2].innerHTML = '<span>' + RUPEE + '</span>' + cartState.subtotal.toFixed(2);
     }
   }
 
@@ -362,20 +388,44 @@
             '<td class="checkout-description"><h3><a href="' + escapeHtml(item.item_url) + '">' + escapeHtml(item.name) + '</a></h3><em>From your cart</em></td>' +
             '<td class="checkout-model">' + escapeHtml(item.sku || ('SKU-' + item.id)) + '</td>' +
             '<td class="checkout-quantity">' + escapeHtml(item.qty) + '</td>' +
-            '<td class="checkout-price"><strong><span>$</span>' + Number(item.price || 0).toFixed(2) + '</strong></td>' +
-            '<td class="checkout-total"><strong><span>$</span>' + Number(item.subtotal || 0).toFixed(2) + '</strong></td>';
+            '<td class="checkout-price"><strong><span>' + RUPEE + '</span>' + Number(item.price || 0).toFixed(2) + '</strong></td>' +
+            '<td class="checkout-total"><strong><span>' + RUPEE + '</span>' + Number(item.subtotal || 0).toFixed(2) + '</strong></td>';
           table.appendChild(row);
         }
       }
     }
 
-    var totalEls = confirmSection.querySelectorAll('.checkout-total-block .price');
-    if (totalEls.length >= 5) {
-      totalEls[0].innerHTML = '<span>$</span>' + cartState.subtotal.toFixed(2);
-      totalEls[1].innerHTML = '<span>$</span>0.00';
-      totalEls[2].innerHTML = '<span>$</span>0.00';
-      totalEls[3].innerHTML = '<span>$</span>0.00';
-      totalEls[4].innerHTML = '<span>$</span>' + cartState.subtotal.toFixed(2);
+    var subtotalEl = confirmSection.querySelector('.js-checkout-subtotal');
+    var shippingEl = confirmSection.querySelector('.js-checkout-shipping');
+    var discountEl = confirmSection.querySelector('.js-checkout-discount');
+    var vatEl = confirmSection.querySelector('.js-checkout-vat');
+    var totalEl = confirmSection.querySelector('.js-checkout-total');
+
+    if (subtotalEl) {
+      subtotalEl.innerHTML = '<span>' + RUPEE + '</span>' + cartState.subtotal.toFixed(2);
+    }
+    if (shippingEl) {
+      shippingEl.innerHTML = '<span>' + RUPEE + '</span>0.00';
+    }
+    if (discountEl) {
+      discountEl.innerHTML = '<span>' + RUPEE + '</span>' + cartState.discount.toFixed(2);
+    }
+    if (vatEl) {
+      vatEl.innerHTML = '<span>' + RUPEE + '</span>0.00';
+    }
+    if (totalEl) {
+      totalEl.innerHTML = '<span>' + RUPEE + '</span>' + cartState.total.toFixed(2);
+    }
+
+    var couponFeedback = confirmSection.querySelector('#coupon-feedback');
+    if (couponFeedback) {
+      if (cartState.coupon && cartState.coupon.code) {
+        couponFeedback.className = 'text-success';
+        couponFeedback.textContent = 'Coupon ' + String(cartState.coupon.code) + ' applied. Discount: ' + RUPEE + Number(cartState.discount || 0).toFixed(2);
+      } else {
+        couponFeedback.className = 'text-muted';
+        couponFeedback.textContent = '';
+      }
     }
 
     var confirmBtn = document.querySelector('#button-confirm');
@@ -489,6 +539,19 @@
     });
 
     document.addEventListener('click', function (event) {
+      var image = event.target.closest('.product-item .pi-img-wrapper img');
+      if (image) {
+        var cardFromImage = image.closest('.product-item');
+        var titleLink = cardFromImage ? cardFromImage.querySelector('h3 a') : null;
+        var targetHref = titleLink ? String(titleLink.getAttribute('href') || '').trim() : '';
+        // Keep existing controls working; navigate only when clicking the product image itself.
+        if (targetHref && targetHref !== '#' && targetHref.toLowerCase().indexOf('javascript:') !== 0) {
+          event.preventDefault();
+          window.location.href = targetHref;
+          return;
+        }
+      }
+
       var addBtn = event.target.closest('.js-add-to-cart');
       if (addBtn) {
         event.preventDefault();
@@ -895,6 +958,43 @@
     apiCart('summary', {}, function () {});
   }
 
+  function setupCouponActions() {
+    var applyBtn = document.querySelector('#apply-coupon-btn');
+    var input = document.querySelector('#coupon-code');
+    var feedback = document.querySelector('#coupon-feedback');
+    if (!applyBtn || !input || !feedback) {
+      return;
+    }
+
+    function setFeedback(message, cssClass) {
+      feedback.textContent = message || '';
+      feedback.className = cssClass || 'text-muted';
+    }
+
+    applyBtn.addEventListener('click', function () {
+      var code = String(input.value || '').trim();
+      if (!code) {
+        apiCart('remove_coupon', {}, function (response) {
+          if (response && response.success) {
+            setFeedback('Coupon removed.', 'text-muted');
+          } else {
+            setFeedback((response && response.message) || 'Could not remove coupon.', 'text-danger');
+          }
+        });
+        return;
+      }
+
+      setFeedback('Validating coupon...', 'text-info');
+      apiCart('apply_coupon', { coupon_code: code }, function (response) {
+        if (response && response.success) {
+          setFeedback(response.message || 'Coupon applied.', 'text-success');
+        } else {
+          setFeedback((response && response.message) || 'Invalid or expired coupon code.', 'text-danger');
+        }
+      });
+    });
+  }
+
   function hydrateStaticProductListsFromDb() {
     var rows = Array.prototype.slice.call(document.querySelectorAll('.product-list'));
     if (!rows.length) {
@@ -988,8 +1088,12 @@
       var nodes = document.querySelectorAll(selector);
       nodes.forEach(function (node) {
         var text = String(node.textContent || '');
-        if (text.indexOf('$') !== -1) {
-          node.textContent = text.replace(/\$/g, 'INR ');
+        if (text.indexOf('$') !== -1 || text.indexOf('INR') !== -1 || text.indexOf('Rs.') !== -1) {
+          node.textContent = text
+            .replace(/\$/g, RUPEE + ' ')
+            .replace(/\bINR\b/g, RUPEE)
+            .replace(/\bRs\.\b/g, RUPEE)
+            .replace(/\s{2,}/g, ' ');
         }
       });
     });
@@ -1031,6 +1135,12 @@
         var url = String(cat.url || '').trim();
         if (!name || !url) {
           return;
+        }
+
+        // Product category "General" should act as Home in top navigation.
+        if (name.toLowerCase() === 'general') {
+          name = 'HOME';
+          url = 'shop-index.php';
         }
 
       var li = document.createElement('li');
@@ -1255,6 +1365,7 @@
     normalizeStaticCurrencyLabels();
     applyCheckoutPrefillSelects();
     handleCheckout();
+    setupCouponActions();
     refreshCart();
   }
 
@@ -1271,3 +1382,4 @@
     init();
   });
 })(window, document, window.jQuery);
+

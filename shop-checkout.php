@@ -488,26 +488,36 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                       </table>
                       </div>
                       <div class="checkout-total-block">
+                        <div class="form-group" style="margin-bottom:12px;">
+                          <label for="coupon-code">Coupon code</label>
+                          <div class="input-group">
+                            <input type="text" id="coupon-code" class="form-control" placeholder="Enter coupon code">
+                            <span class="input-group-btn">
+                              <button class="btn btn-default" type="button" id="apply-coupon-btn">Apply</button>
+                            </span>
+                          </div>
+                          <small id="coupon-feedback" class="text-muted" style="display:block;margin-top:6px;"></small>
+                        </div>
                         <ul>
                           <li>
                             <em>Sub total</em>
-                            <strong class="price"><span>INR </span>47.00</strong>
+                            <strong class="price js-checkout-subtotal"><span>₹</span>0.00</strong>
                           </li>
                           <li>
                             <em>Shipping cost</em>
-                            <strong class="price"><span>INR </span>3.00</strong>
+                            <strong class="price js-checkout-shipping"><span>₹</span>0.00</strong>
                           </li>
                           <li>
-                            <em>Eco Tax (-2.00)</em>
-                            <strong class="price"><span>INR </span>3.00</strong>
+                            <em>Coupon Discount</em>
+                            <strong class="price js-checkout-discount"><span>₹</span>0.00</strong>
                           </li>
                           <li>
                             <em>VAT (17.5%)</em>
-                            <strong class="price"><span>INR </span>3.00</strong>
+                            <strong class="price js-checkout-vat"><span>₹</span>0.00</strong>
                           </li>
                           <li class="checkout-total-price">
                             <em>Total</em>
-                            <strong class="price"><span>INR </span>56.00</strong>
+                            <strong class="price js-checkout-total"><span>₹</span>0.00</strong>
                           </li>
                         </ul>
                       </div>

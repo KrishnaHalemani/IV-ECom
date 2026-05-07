@@ -19,6 +19,19 @@ button {
   font-family: Arial, sans-serif !important;
 }
 
+/* Ensure Indian Rupee glyph renders correctly in all price labels. */
+.pi-price,
+.price,
+.top-cart-info-value,
+.checkout-price strong,
+.checkout-total strong,
+.shopping-total .price,
+.checkout-total-block .price,
+.goods-page-price strong,
+.goods-page-total strong {
+  font-family: "Segoe UI", "Noto Sans", "DejaVu Sans", Arial, sans-serif !important;
+}
+
 /* Global header alignment fixes (all pages) */
 @media (min-width: 992px) {
   .pre-header .container .row {
@@ -88,15 +101,18 @@ button {
   }
 
   .header .header-navigation > ul > li.menu-search {
-    margin-left: auto;
-    margin-right: 0;
+    display: none !important;
   }
 
   .header .shop-user-menu,
+  .header .shop-orders-link,
   .header .top-cart-block {
     float: none;
     flex: 0 0 auto;
     white-space: nowrap;
+    margin-top: 0 !important;
+    align-self: center;
+    vertical-align: middle;
   }
 
   .header .mobi-toggler {
@@ -107,8 +123,36 @@ button {
     margin-left: 10px;
   }
 
+  .header .shop-orders-link {
+    margin-left: 10px;
+    height: 38px;
+    line-height: 24px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .header .shop-user-menu .btn {
+    height: 38px;
+    line-height: 24px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .header .top-cart-block {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 10px;
+  }
+
+  .header .top-cart-info {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+  }
+
   .header .shop-user-menu + .top-cart-block,
-  .header .top-cart-block + .shop-user-menu {
+  .header .top-cart-block + .shop-user-menu,
+  .header .shop-orders-link + .top-cart-block {
     margin-left: 10px;
   }
 }

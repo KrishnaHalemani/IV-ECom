@@ -27,8 +27,11 @@ if ($items === []) {
     rp_json(['success' => false, 'message' => 'Your cart is empty.'], 422);
 }
 
-$subtotal = (float) getCartSubtotal();
-$amountPaise = (int) round($subtotal * 100);
+$summary = getCartSummary();
+$subtotal = (float) ($summary['subtotal'] ?? 0);
+$discount = (float) ($summary['discount'] ?? 0);
+$payableTotal = (float) ($summary['total'] ?? $subtotal);
+$amountPaise = (int) round($payableTotal * 100);
 if ($amountPaise <= 0) {
     rp_json(['success' => false, 'message' => 'Invalid order amount.'], 422);
 }
@@ -47,6 +50,9 @@ $payload = [
     'notes' => [
         'user_id' => (string) $userId,
         'customer_email' => $email,
+        'subtotal' => number_format($subtotal, 2, '.', ''),
+        'discount' => number_format($discount, 2, '.', ''),
+        'payable_total' => number_format($payableTotal, 2, '.', ''),
     ],
 ];
 
@@ -86,4 +92,3 @@ rp_json([
     'contact' => $phone,
     'description' => 'Checkout payment',
 ]);
-

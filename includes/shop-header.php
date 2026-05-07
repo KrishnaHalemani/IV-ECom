@@ -27,25 +27,13 @@ $pagesMenuLabel = htmlspecialchars(site_content_value($siteContentHeader, 'nav_p
             <li><a href="shop-terms-conditions-page.php">Terms &amp; Conditions</a></li>
           </ul>
         </li>
-        <li class="menu-search">
-          <span class="sep"></span>
-          <i class="fa fa-search search-btn"></i>
-          <div class="search-box">
-            <form action="form-submit.php" method="post">
-              <div class="input-group">
-                <input type="text" placeholder="Search" class="form-control" name="search">
-                <span class="input-group-btn"><button class="btn btn-primary" type="submit">Search</button></span>
-              </div>
-            </form>
-          </div>
-        </li>
       </ul>
     </div>
 
     <div class="top-cart-block">
       <div class="top-cart-info">
         <a href="javascript:void(0);" class="top-cart-info-count">0 items</a>
-        <a href="javascript:void(0);" class="top-cart-info-value">INR 0.00</a>
+        <a href="javascript:void(0);" class="top-cart-info-value">₹ 0.00</a>
       </div>
       <i class="fa fa-shopping-cart"></i>
       <div class="top-cart-content-wrapper">

@@ -113,7 +113,7 @@ if ($orders !== []) {
               <div class="alert alert-success"><?php echo auth_h($successMessage); ?></div>
             <?php endif; ?>
 
-            <h3>My Orders</h3>
+            <h3 id="orders">My Orders</h3>
             <?php if ($orders === []): ?>
               <div class="alert alert-info">No orders yet.</div>
             <?php else: ?>
@@ -127,7 +127,10 @@ if ($orders !== []) {
                       </div>
                       <div class="col-sm-4 text-right">
                         <span class="label label-info"><?php echo auth_h(ucfirst((string) $order['status'])); ?></span>
-                        <div><strong>INR <?php echo number_format((float) $order['total_amount'], 2); ?></strong></div>
+                        <div><strong>₹ <?php echo number_format((float) $order['total_amount'], 2); ?></strong></div>
+                        <div style="margin-top:8px;">
+                          <a class="btn btn-xs btn-default" href="invoice-download.php?order_id=<?php echo (int) $order['id']; ?>">Download Invoice</a>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -147,8 +150,8 @@ if ($orders !== []) {
                             <tr>
                               <td><?php echo auth_h((string) $item['name']); ?></td>
                               <td><?php echo (int) $item['quantity']; ?></td>
-                              <td>INR <?php echo number_format((float) $item['price'], 2); ?></td>
-                              <td>INR <?php echo number_format((float) $item['price'] * (int) $item['quantity'], 2); ?></td>
+                              <td>₹ <?php echo number_format((float) $item['price'], 2); ?></td>
+                              <td>₹ <?php echo number_format((float) $item['price'] * (int) $item['quantity'], 2); ?></td>
                             </tr>
                           <?php endforeach; ?>
                         </tbody>

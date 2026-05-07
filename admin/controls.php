@@ -47,6 +47,234 @@ function handle_product_image_upload(string $fieldName, ?string $currentPath = n
     return 'uploads/products/' . $newName;
 }
 
+function handle_product_gallery_uploads(string $fieldName): array
+{
+    if (!isset($_FILES[$fieldName]) || !is_array($_FILES[$fieldName])) {
+        return [];
+    }
+
+    $fileBag = $_FILES[$fieldName];
+    $names = $fileBag['name'] ?? null;
+    $tmpNames = $fileBag['tmp_name'] ?? null;
+    $errors = $fileBag['error'] ?? null;
+    if (!is_array($names) || !is_array($tmpNames) || !is_array($errors)) {
+        return [];
+    }
+
+    $saved = [];
+    $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    $uploadDir = __DIR__ . '/../uploads/products';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
+    foreach ($names as $index => $originalNameRaw) {
+        $error = (int) ($errors[$index] ?? UPLOAD_ERR_NO_FILE);
+        if ($error !== UPLOAD_ERR_OK) {
+            continue;
+        }
+        $tmpName = (string) ($tmpNames[$index] ?? '');
+        if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+            continue;
+        }
+
+        $originalName = (string) $originalNameRaw;
+        $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed, true)) {
+            continue;
+        }
+
+        $newName = 'product_gallery_' . time() . '_' . uniqid('', true) . '.' . $ext;
+        $destination = $uploadDir . '/' . $newName;
+        if (!move_uploaded_file($tmpName, $destination)) {
+            continue;
+        }
+        $saved[] = 'uploads/products/' . $newName;
+    }
+
+    return $saved;
+}
+
+function slugify_color_key(string $value): string
+{
+    $key = preg_replace('/[^a-z0-9]+/i', '_', trim($value));
+    $key = trim((string) $key, '_');
+    return strtolower($key);
+}
+
+function handle_color_gallery_uploads(string $fieldName): array
+{
+    $result = ['files' => [], 'errors' => []];
+    if (!isset($_FILES[$fieldName]) || !is_array($_FILES[$fieldName])) {
+        return $result;
+    }
+
+    $fileBag = $_FILES[$fieldName];
+    $names = $fileBag['name'] ?? null;
+    $tmpNames = $fileBag['tmp_name'] ?? null;
+    $errors = $fileBag['error'] ?? null;
+    if (!is_array($names) || !is_array($tmpNames) || !is_array($errors)) {
+        return $result;
+    }
+
+    $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    $uploadDir = __DIR__ . '/../uploads/products';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
+    foreach ($names as $colorKeyRaw => $colorFiles) {
+        $colorKey = slugify_color_key((string) $colorKeyRaw);
+        if ($colorKey === '' || !is_array($colorFiles)) {
+            continue;
+        }
+
+        $tmpByColor = $tmpNames[$colorKeyRaw] ?? [];
+        $errByColor = $errors[$colorKeyRaw] ?? [];
+        if (!is_array($tmpByColor) || !is_array($errByColor)) {
+            continue;
+        }
+
+        foreach ($colorFiles as $index => $originalNameRaw) {
+            $error = (int) ($errByColor[$index] ?? UPLOAD_ERR_NO_FILE);
+            if ($error === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            if ($error !== UPLOAD_ERR_OK) {
+                $result['errors'][] = 'One image upload failed for color ' . strtoupper($colorKey) . '.';
+                continue;
+            }
+
+            $tmpName = (string) ($tmpByColor[$index] ?? '');
+            if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+                continue;
+            }
+            $ext = strtolower(pathinfo((string) $originalNameRaw, PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed, true)) {
+                $result['errors'][] = 'Invalid image type for color ' . strtoupper($colorKey) . '. Allowed: jpg, jpeg, png, gif, webp.';
+                continue;
+            }
+
+            $newName = 'product_gallery_' . time() . '_' . uniqid('', true) . '.' . $ext;
+            $destination = $uploadDir . '/' . $newName;
+            if (!move_uploaded_file($tmpName, $destination)) {
+                $result['errors'][] = 'Could not save one image for color ' . strtoupper($colorKey) . '.';
+                continue;
+            }
+            $result['files'][$colorKey][] = 'uploads/products/' . $newName;
+        }
+    }
+
+    return $result;
+}
+
+function parse_option_values(string $raw): string
+{
+    $parts = preg_split('/[,\\n\\r]+/', $raw) ?: [];
+    $clean = [];
+    foreach ($parts as $part) {
+        $value = trim((string) $part);
+        if ($value === '') {
+            continue;
+        }
+        $clean[mb_strtolower($value)] = $value;
+    }
+    return implode(', ', array_values($clean));
+}
+
+function decode_gallery_images(string $json): array
+{
+    $json = trim($json);
+    if ($json === '') {
+        return [];
+    }
+
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $clean = [];
+    foreach ($decoded as $path) {
+        $value = trim((string) $path);
+        if ($value !== '') {
+            $clean[$value] = true;
+        }
+    }
+    return array_keys($clean);
+}
+
+function build_color_image_map_json(string $rawMap, array $galleryImages): string
+{
+    $rawMap = trim($rawMap);
+    if ($rawMap === '' || $galleryImages === []) {
+        return '{}';
+    }
+
+    $result = [];
+    $pairs = preg_split('/[;\\n\\r]+/', $rawMap) ?: [];
+    foreach ($pairs as $pair) {
+        $pair = trim((string) $pair);
+        if ($pair === '' || strpos($pair, '=') === false) {
+            continue;
+        }
+        [$colorRaw, $indexesRaw] = array_map('trim', explode('=', $pair, 2));
+        if ($colorRaw === '' || $indexesRaw === '') {
+            continue;
+        }
+        $colorKey = mb_strtoupper($colorRaw);
+        $indexes = preg_split('/[,\\s]+/', $indexesRaw) ?: [];
+        $paths = [];
+        foreach ($indexes as $idxRaw) {
+            $idx = (int) $idxRaw;
+            if ($idx <= 0) {
+                continue;
+            }
+            $position = $idx - 1;
+            if (isset($galleryImages[$position])) {
+                $paths[] = (string) $galleryImages[$position];
+            }
+        }
+        if ($paths !== []) {
+            $result[$colorKey] = array_values(array_unique($paths));
+        }
+    }
+
+    $json = json_encode($result, JSON_UNESCAPED_SLASHES);
+    return is_string($json) ? $json : '{}';
+}
+
+function color_image_map_json_to_input(string $json, array $galleryImages): string
+{
+    $decoded = json_decode(trim($json), true);
+    if (!is_array($decoded) || $decoded === []) {
+        return '';
+    }
+
+    $indexByPath = [];
+    foreach ($galleryImages as $i => $path) {
+        $indexByPath[(string) $path] = $i + 1;
+    }
+
+    $chunks = [];
+    foreach ($decoded as $color => $paths) {
+        if (!is_array($paths)) {
+            continue;
+        }
+        $idx = [];
+        foreach ($paths as $path) {
+            $p = (string) $path;
+            if (isset($indexByPath[$p])) {
+                $idx[] = (string) $indexByPath[$p];
+            }
+        }
+        if ($idx !== []) {
+            $chunks[] = mb_strtoupper((string) $color) . '=' . implode(',', $idx);
+        }
+    }
+    return implode(';', $chunks);
+}
+
 function handle_hero_image_upload(string $fieldName, ?string $currentPath = null): ?string
 {
     if (!isset($_FILES[$fieldName]) || !is_array($_FILES[$fieldName])) {
@@ -299,23 +527,121 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $price = (float) ($_POST['price'] ?? 0);
             $stock = (int) ($_POST['stock_qty'] ?? 0);
             $description = trim((string) ($_POST['description'] ?? ''));
+            $selectedSizesRaw = $_POST['available_sizes'] ?? [];
+            $colorNamesRaw = $_POST['color_names'] ?? [];
+            $colorAllSizesRaw = $_POST['color_all_sizes'] ?? [];
+            $colorSizesRaw = $_POST['color_sizes'] ?? [];
             $isActive = isset($_POST['is_active']) ? 1 : 0;
             $displaySection = normalize_display_section((string) ($_POST['display_section'] ?? 'home'));
             $displayFlags = display_section_flags($displaySection);
             $isFeatured = (int) $displayFlags['is_featured'];
             $isNew = (int) $displayFlags['is_new'];
             $imagePath = handle_product_image_upload('image_file', '');
+            $colorGalleryPayload = handle_color_gallery_uploads('color_files');
+            $colorGalleryUploads = is_array($colorGalleryPayload['files'] ?? null) ? $colorGalleryPayload['files'] : [];
+            $colorGalleryErrors = is_array($colorGalleryPayload['errors'] ?? null) ? $colorGalleryPayload['errors'] : [];
+            $allowedSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+            $selectedSizes = [];
+            if (is_array($selectedSizesRaw)) {
+                foreach ($selectedSizesRaw as $sizeRaw) {
+                    $size = strtoupper(trim((string) $sizeRaw));
+                    if (in_array($size, $allowedSizes, true)) {
+                        $selectedSizes[$size] = $size;
+                    }
+                }
+            }
+            $sizeList = array_values($selectedSizes);
+
+            $colorNames = [];
+            if (is_array($colorNamesRaw)) {
+                foreach ($colorNamesRaw as $idx => $colorRaw) {
+                    $color = trim((string) $colorRaw);
+                    if ($color === '') {
+                        continue;
+                    }
+                    $colorKey = 'color_' . ((int) $idx + 1);
+                    $colorNames[$colorKey] = $color;
+                }
+            }
+
+            $validationErrors = [];
+            foreach ($colorGalleryErrors as $errorMessage) {
+                $validationErrors[] = (string) $errorMessage;
+            }
+            if ($sizeList === []) {
+                $validationErrors[] = 'Select at least one size.';
+            }
+            if ($colorNames === []) {
+                $validationErrors[] = 'Add at least one color.';
+            }
+
+            $colorImageMap = [];
+            foreach ($colorNames as $colorKey => $colorLabel) {
+                $images = $colorGalleryUploads[$colorKey] ?? [];
+                if (!is_array($images)) {
+                    $images = [];
+                }
+                $imageCount = count($images);
+                if ($imageCount < 1 || $imageCount > 10) {
+                    $validationErrors[] = 'Color "' . $colorLabel . '" must have 1 to 10 photos.';
+                }
+
+                $hasAllSizes = isset($colorAllSizesRaw[$colorKey]) && (string) $colorAllSizesRaw[$colorKey] === '1';
+                $selectedColorSizes = [];
+                if (!$hasAllSizes) {
+                    $rawColorSizes = $colorSizesRaw[$colorKey] ?? [];
+                    if (is_array($rawColorSizes)) {
+                        foreach ($rawColorSizes as $rawSize) {
+                            $size = strtoupper(trim((string) $rawSize));
+                            if (isset($selectedSizes[$size])) {
+                                $selectedColorSizes[$size] = $size;
+                            }
+                        }
+                    }
+                    if ($selectedColorSizes === []) {
+                        $validationErrors[] = 'Select at least one size for color "' . $colorLabel . '" or choose "All selected sizes".';
+                    }
+                }
+
+                if ($images !== []) {
+                    $colorImageMap[strtoupper($colorLabel)] = array_values($images);
+                }
+            }
+
+            $galleryUploads = [];
+            foreach ($colorImageMap as $paths) {
+                foreach ($paths as $path) {
+                    if (!in_array($path, $galleryUploads, true)) {
+                        $galleryUploads[] = $path;
+                    }
+                }
+            }
+            if ($imagePath === '' && $galleryUploads !== []) {
+                $imagePath = (string) $galleryUploads[0];
+            }
+            $galleryImagesJson = json_encode($galleryUploads, JSON_UNESCAPED_SLASHES);
+            if (!is_string($galleryImagesJson)) {
+                $galleryImagesJson = '[]';
+            }
+            $colorImageMapJson = json_encode($colorImageMap, JSON_UNESCAPED_SLASHES);
+            if (!is_string($colorImageMapJson)) {
+                $colorImageMapJson = '{}';
+            }
+            $sizeOptions = implode(', ', $sizeList);
+            $colorOptions = implode(', ', array_values($colorNames));
 
             if ($name === '' || $sku === '') {
                 admin_flash_set('Product name and SKU are required.', 'error');
+            } elseif ($validationErrors !== []) {
+                admin_flash_set(implode(' ', $validationErrors), 'error');
             } else {
                 $cat = $categoryId > 0 ? $categoryId : null;
                 $stmt = $db->prepare(
-                    'INSERT INTO products (category_id, name, sku, image_path, description, price, stock_qty, is_active, is_featured, is_new, display_section)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO products (category_id, name, sku, image_path, description, price, stock_qty, is_active, is_featured, is_new, display_section, size_options, color_options, gallery_images_json, color_image_map_json)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 if ($stmt) {
-                    $stmt->bind_param('issssdiiiis', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $isFeatured, $isNew, $displaySection);
+                    $stmt->bind_param('issssdiiiisssss', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $isFeatured, $isNew, $displaySection, $sizeOptions, $colorOptions, $galleryImagesJson, $colorImageMapJson);
                     $ok = $stmt->execute();
                     $stmt->close();
                     admin_flash_set($ok ? 'Product added.' : 'Could not add product (SKU must be unique).', $ok ? 'success' : 'error');
@@ -329,6 +655,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $price = (float) ($_POST['price'] ?? 0);
             $stock = (int) ($_POST['stock_qty'] ?? 0);
             $description = trim((string) ($_POST['description'] ?? ''));
+            $sizeOptions = parse_option_values((string) ($_POST['size_options'] ?? ''));
+            $colorOptions = parse_option_values((string) ($_POST['color_options'] ?? ''));
+            $colorImageMapRaw = (string) ($_POST['color_image_map'] ?? '');
             $isActive = isset($_POST['is_active']) ? 1 : 0;
             $displaySection = normalize_display_section((string) ($_POST['display_section'] ?? 'home'));
             $displayFlags = display_section_flags($displaySection);
@@ -336,16 +665,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $isNew = (int) $displayFlags['is_new'];
             $currentImage = trim((string) ($_POST['current_image_path'] ?? ''));
             $imagePath = handle_product_image_upload('image_file', $currentImage);
+            $existingGallery = decode_gallery_images((string) ($_POST['current_gallery_images_json'] ?? ''));
+            $newGalleryUploads = handle_product_gallery_uploads('gallery_files');
+            $galleryMerged = array_values(array_unique(array_merge($existingGallery, $newGalleryUploads)));
+            if ($imagePath === '' && $galleryMerged !== []) {
+                $imagePath = (string) $galleryMerged[0];
+            }
+            $galleryImagesJson = json_encode($galleryMerged, JSON_UNESCAPED_SLASHES);
+            if (!is_string($galleryImagesJson)) {
+                $galleryImagesJson = '[]';
+            }
+            $colorImageMapJson = build_color_image_map_json($colorImageMapRaw, $galleryMerged);
 
             if ($id > 0 && $name !== '' && $sku !== '') {
                 $cat = $categoryId > 0 ? $categoryId : null;
                 $stmt = $db->prepare(
                     'UPDATE products
-                     SET category_id = ?, name = ?, sku = ?, image_path = ?, description = ?, price = ?, stock_qty = ?, is_active = ?, is_featured = ?, is_new = ?, display_section = ?
+                     SET category_id = ?, name = ?, sku = ?, image_path = ?, description = ?, price = ?, stock_qty = ?, is_active = ?, is_featured = ?, is_new = ?, display_section = ?, size_options = ?, color_options = ?, gallery_images_json = ?, color_image_map_json = ?
                      WHERE id = ?'
                 );
                 if ($stmt) {
-                    $stmt->bind_param('issssdiiiisi', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $isFeatured, $isNew, $displaySection, $id);
+                    $stmt->bind_param('issssdiiiisssssi', $cat, $name, $sku, $imagePath, $description, $price, $stock, $isActive, $isFeatured, $isNew, $displaySection, $sizeOptions, $colorOptions, $galleryImagesJson, $colorImageMapJson, $id);
                     $ok = $stmt->execute();
                     $stmt->close();
                     admin_flash_set($ok ? 'Product updated.' : 'Could not update product.', $ok ? 'success' : 'error');
@@ -753,7 +1093,7 @@ if ($categoriesResult instanceof mysqli_result) {
 $categoryOptionRows = build_category_option_rows($categoriesData, true);
 
 $products = $db->query(
-    'SELECT p.id, p.name, p.sku, p.image_path, p.price, p.stock_qty, p.is_active, p.is_featured, p.is_new, p.display_section, p.description, p.created_at, p.category_id, c.name AS category_name
+    'SELECT p.id, p.name, p.sku, p.image_path, p.price, p.stock_qty, p.is_active, p.is_featured, p.is_new, p.display_section, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.description, p.created_at, p.category_id, c.name AS category_name
      FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
      ORDER BY p.id DESC'
@@ -998,6 +1338,7 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
             <div><input type="number" step="0.01" name="price" placeholder="Price" required></div>
             <div><input type="number" name="stock_qty" placeholder="Stock" value="0" required></div>
             <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
+            <div><input type="file" name="gallery_files[]" accept=".jpg,.jpeg,.png,.gif,.webp" multiple></div>
             <div><label><input type="checkbox" name="is_active" checked aria-label="Active"></label></div>
             <div>
               <select name="display_section">
@@ -1007,6 +1348,25 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
                 <option value="none">None</option>
               </select>
             </div>
+          </div>
+          <div class="mt">
+            <label>Step 1: Select available sizes</label>
+            <div>
+              <?php foreach (['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'] as $sizeChoice): ?>
+                <label style="margin-right:12px;">
+                  <input type="checkbox" name="available_sizes[]" value="<?php echo admin_h($sizeChoice); ?>">
+                  <?php echo admin_h($sizeChoice); ?>
+                </label>
+              <?php endforeach; ?>
+            </div>
+          </div>
+          <div class="mt">
+            <label for="color_count">Step 2: How many colors?</label>
+            <input type="number" id="color_count" min="1" max="20" value="1" placeholder="Enter number of colors">
+          </div>
+          <div class="mt" id="color-variant-builder"></div>
+          <div class="mt">
+            <small>Each color requires at least 1 photo and maximum 10 photos.</small>
           </div>
           <div class="mt"><textarea name="description" placeholder="Description"></textarea></div>
           <div class="mt"><button class="btn btn-primary" type="submit">Add Product</button></div>
@@ -1024,6 +1384,7 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
                     <input type="hidden" name="action" value="update_product">
                     <input type="hidden" name="id" value="<?php echo (int) $row['id']; ?>">
                     <input type="hidden" name="current_image_path" value="<?php echo admin_h((string) $row['image_path']); ?>">
+                    <input type="hidden" name="current_gallery_images_json" value="<?php echo admin_h((string) ($row['gallery_images_json'] ?? '')); ?>">
                     <div class="grid-4">
                       <div><input type="text" name="name" value="<?php echo admin_h((string) $row['name']); ?>" required></div>
                       <div><input type="text" name="sku" value="<?php echo admin_h((string) $row['sku']); ?>" required></div>
@@ -1040,6 +1401,7 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
                       <div><input type="number" step="0.01" name="price" value="<?php echo admin_h((string) $row['price']); ?>" required></div>
                       <div><input type="number" name="stock_qty" value="<?php echo (int) $row['stock_qty']; ?>" required></div>
                       <div><input type="file" name="image_file" accept=".jpg,.jpeg,.png,.gif,.webp"></div>
+                      <div><input type="file" name="gallery_files[]" accept=".jpg,.jpeg,.png,.gif,.webp" multiple></div>
                       <div><label><input type="checkbox" name="is_active" <?php echo (int) $row['is_active'] === 1 ? 'checked' : ''; ?> aria-label="Active"></label></div>
                       <div>
                         <select name="display_section">
@@ -1060,9 +1422,27 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
                         </select>
                       </div>
                     </div>
+                    <div class="mt grid-2">
+                      <div><input type="text" name="size_options" value="<?php echo admin_h((string) ($row['size_options'] ?? '')); ?>" placeholder="Sizes (comma-separated)"></div>
+                      <div><input type="text" name="color_options" value="<?php echo admin_h((string) ($row['color_options'] ?? '')); ?>" placeholder="Colors (comma-separated)"></div>
+                    </div>
+                    <?php
+                    $existingGalleryImages = decode_gallery_images((string) ($row['gallery_images_json'] ?? ''));
+                    $colorImageMapInput = color_image_map_json_to_input((string) ($row['color_image_map_json'] ?? ''), $existingGalleryImages);
+                    ?>
+                    <div class="mt">
+                      <input type="text" name="color_image_map" value="<?php echo admin_h($colorImageMapInput); ?>" placeholder='Color image mapping: RED=1,2;BLUE=3,4'>
+                    </div>
                     <?php if ((string) $row['image_path'] !== ''): ?>
                       <div class="mt">
                         <img src="../<?php echo admin_h((string) $row['image_path']); ?>" alt="product" style="max-height:80px;border:1px solid #ddd;padding:2px;">
+                      </div>
+                    <?php endif; ?>
+                    <?php if ($existingGalleryImages !== []): ?>
+                      <div class="mt">
+                        <?php foreach ($existingGalleryImages as $galleryPath): ?>
+                          <img src="../<?php echo admin_h($galleryPath); ?>" alt="gallery" style="max-height:60px;border:1px solid #ddd;padding:2px;margin-right:6px;">
+                        <?php endforeach; ?>
                       </div>
                     <?php endif; ?>
                     <div class="mt"><textarea name="description"><?php echo admin_h((string) $row['description']); ?></textarea></div>
@@ -1492,5 +1872,62 @@ $sidebarFilterTitleLabel = $contentLabelMap['sidebar_filter_title'] ?? 'Filter';
       </div>
     <?php endif; ?>
   </div>
+  <script>
+    (function () {
+      var colorCountInput = document.getElementById('color_count');
+      var builder = document.getElementById('color-variant-builder');
+      if (!colorCountInput || !builder) {
+        return;
+      }
+
+      var sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+
+      function renderColorRows() {
+        var count = parseInt(colorCountInput.value || '1', 10);
+        if (isNaN(count) || count < 1) {
+          count = 1;
+        }
+        if (count > 20) {
+          count = 20;
+        }
+        colorCountInput.value = String(count);
+
+        builder.innerHTML = '';
+        for (var i = 1; i <= count; i++) {
+          var row = document.createElement('div');
+          row.className = 'panel mt';
+          row.innerHTML =
+            '<div><label>Color ' + i + ' name</label><input type="text" name="color_names[]" placeholder="e.g. Red" required></div>' +
+            '<div class="mt"><label>Color ' + i + ' photos (1-10)</label><input data-color-files="1" type="file" name="color_files[color_' + i + '][]" accept=".jpg,.jpeg,.png,.gif,.webp" multiple required></div>' +
+            '<div class="mt"><label><input type="checkbox" name="color_all_sizes[color_' + i + ']" value="1" checked> This color has all selected sizes</label></div>' +
+            '<div class="mt"><small>If not all sizes, choose specific sizes:</small></div>' +
+            '<div class="mt">' +
+              sizes.map(function (s) {
+                return '<label style="margin-right:12px;"><input type="checkbox" name="color_sizes[color_' + i + '][]" value="' + s + '"> ' + s + '</label>';
+              }).join('') +
+            '</div>';
+          builder.appendChild(row);
+        }
+      }
+
+      renderColorRows();
+      colorCountInput.addEventListener('input', renderColorRows);
+
+      var createProductForm = colorCountInput.closest('form');
+      if (createProductForm) {
+        createProductForm.addEventListener('submit', function (event) {
+          var fileInputs = builder.querySelectorAll('input[data-color-files="1"]');
+          for (var i = 0; i < fileInputs.length; i++) {
+            var fileCount = fileInputs[i].files ? fileInputs[i].files.length : 0;
+            if (fileCount < 1 || fileCount > 10) {
+              event.preventDefault();
+              alert('Each color must have minimum 1 and maximum 10 photos.');
+              return;
+            }
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -36,14 +36,100 @@ function normalize_rating(float $rating): float
     return round($rating * 2) / 2;
 }
 
+function parse_option_list(string $raw): array
+{
+    $parts = preg_split('/[,\\n\\r]+/', $raw) ?: [];
+    $clean = [];
+    foreach ($parts as $part) {
+        $value = trim((string) $part);
+        if ($value === '') {
+            continue;
+        }
+        $clean[mb_strtolower($value)] = $value;
+    }
+    return array_values($clean);
+}
+
+function parse_gallery_images(string $json): array
+{
+    $json = trim($json);
+    if ($json === '') {
+        return [];
+    }
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $images = [];
+    foreach ($decoded as $path) {
+        $imagePath = trim((string) $path);
+        if ($imagePath !== '') {
+            $images[$imagePath] = true;
+        }
+    }
+    return array_keys($images);
+}
+
+function ensure_product_option_columns(mysqli $db): void
+{
+    $checks = [
+        'size_options' => "ALTER TABLE products ADD COLUMN size_options TEXT NULL AFTER display_section",
+        'color_options' => "ALTER TABLE products ADD COLUMN color_options TEXT NULL AFTER size_options",
+        'gallery_images_json' => "ALTER TABLE products ADD COLUMN gallery_images_json LONGTEXT NULL AFTER color_options",
+        'color_image_map_json' => "ALTER TABLE products ADD COLUMN color_image_map_json LONGTEXT NULL AFTER gallery_images_json",
+    ];
+
+    foreach ($checks as $column => $sql) {
+        $result = $db->query("SHOW COLUMNS FROM products LIKE '{$column}'");
+        $missing = $result instanceof mysqli_result ? $result->num_rows === 0 : true;
+        if ($result instanceof mysqli_result) {
+            $result->free();
+        }
+        if ($missing) {
+            $db->query($sql);
+        }
+    }
+}
+
+function parse_color_image_map(string $json): array
+{
+    $json = trim($json);
+    if ($json === '') {
+        return [];
+    }
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $map = [];
+    foreach ($decoded as $color => $paths) {
+        $colorKey = mb_strtoupper(trim((string) $color));
+        if ($colorKey === '' || !is_array($paths)) {
+            continue;
+        }
+        $cleanPaths = [];
+        foreach ($paths as $path) {
+            $p = trim((string) $path);
+            if ($p !== '') {
+                $cleanPaths[$p] = true;
+            }
+        }
+        if ($cleanPaths !== []) {
+            $map[$colorKey] = array_keys($cleanPaths);
+        }
+    }
+    return $map;
+}
+
 $db = get_db_connection();
 ensure_product_reviews_table($db);
+ensure_product_option_columns($db);
 $productId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $selectedProduct = null;
 
 if ($productId > 0) {
     $stmt = $db->prepare(
-        "SELECT p.id, p.name, p.sku, p.image_path, p.description, p.price, p.stock_qty, p.category_id, p.created_at,
+        "SELECT p.id, p.name, p.sku, p.image_path, p.description, p.price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
                 c.name AS category_name, c.slug AS category_slug
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
@@ -52,7 +138,7 @@ if ($productId > 0) {
     );
     if (!$stmt) {
         $stmt = $db->prepare(
-            "SELECT p.id, p.name, p.sku, '' AS image_path, p.description, p.price, p.stock_qty, p.category_id, p.created_at,
+            "SELECT p.id, p.name, p.sku, '' AS image_path, p.description, p.price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
                     c.name AS category_name, c.slug AS category_slug
              FROM products p
              LEFT JOIN categories c ON c.id = p.category_id
@@ -71,7 +157,7 @@ if ($productId > 0) {
 
 if (!$selectedProduct) {
     $fallback = $db->query(
-        "SELECT p.id, p.name, p.sku, p.image_path, p.description, p.price, p.stock_qty, p.category_id, p.created_at,
+        "SELECT p.id, p.name, p.sku, p.image_path, p.description, p.price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
                 c.name AS category_name, c.slug AS category_slug
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
@@ -81,7 +167,7 @@ if (!$selectedProduct) {
     );
     if ($fallback === false) {
         $fallback = $db->query(
-            "SELECT p.id, p.name, p.sku, '' AS image_path, p.description, p.price, p.stock_qty, p.category_id, p.created_at,
+            "SELECT p.id, p.name, p.sku, '' AS image_path, p.description, p.price, p.stock_qty, p.size_options, p.color_options, p.gallery_images_json, p.color_image_map_json, p.category_id, p.created_at,
                     c.name AS category_name, c.slug AS category_slug
              FROM products p
              LEFT JOIN categories c ON c.id = p.category_id
@@ -103,6 +189,16 @@ $productDesc = $selectedProduct ? trim((string) $selectedProduct['description'])
 $productSku = $selectedProduct ? trim((string) ($selectedProduct['sku'] ?? '')) : '';
 $productCreatedAt = $selectedProduct ? trim((string) ($selectedProduct['created_at'] ?? '')) : '';
 $productImg = ($selectedProduct && trim((string) $selectedProduct['image_path']) !== '') ? (string) $selectedProduct['image_path'] : 'assets/pages/img/products/model7.jpg';
+$sizeOptions = parse_option_list((string) ($selectedProduct['size_options'] ?? ''));
+$colorOptions = parse_option_list((string) ($selectedProduct['color_options'] ?? ''));
+$galleryImages = parse_gallery_images((string) ($selectedProduct['gallery_images_json'] ?? ''));
+$colorImageMap = parse_color_image_map((string) ($selectedProduct['color_image_map_json'] ?? ''));
+$productImageSet = [$productImg];
+foreach ($galleryImages as $galleryImage) {
+    if (!in_array($galleryImage, $productImageSet, true)) {
+        $productImageSet[] = $galleryImage;
+    }
+}
 $selectedProductId = (int) ($selectedProduct['id'] ?? 0);
 $currentCategoryId = (int) ($selectedProduct['category_id'] ?? 0);
 $currentCategoryName = trim((string) ($selectedProduct['category_name'] ?? ''));
@@ -424,7 +520,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   <div class="item">
                     <a href="shop-item.php?id=<?php echo $bestId; ?>"><img src="<?php echo fe_h($bestImg); ?>" alt="<?php echo fe_h($bestName); ?>"></a>
                     <h3><a href="shop-item.php?id=<?php echo $bestId; ?>"><?php echo fe_h($bestName); ?></a></h3>
-                    <div class="price">$<?php echo number_format($bestPrice, 2); ?></div>
+                    <div class="price">&#8377; <?php echo number_format($bestPrice, 2); ?></div>
                   </div>
                 <?php endforeach; ?>
               <?php endif; ?>
@@ -441,18 +537,28 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <img src="<?php echo fe_h($productImg); ?>" alt="<?php echo fe_h($productName); ?>" class="img-responsive" data-BigImgsrc="<?php echo fe_h($productImg); ?>" loading="lazy" decoding="async">
                   </div>
                   <div class="product-other-images">
-                    <a href="<?php echo fe_h($productImg); ?>" class="fancybox-button active" rel="photos-lib" data-main-image="true"><img alt="<?php echo fe_h($productName); ?>" src="<?php echo fe_h($productImg); ?>" loading="lazy" decoding="async"></a>
-                    <a href="assets/pages/img/products/model3.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model3.jpg" loading="lazy" decoding="async"></a>
-                    <a href="assets/pages/img/products/model4.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model4.jpg" loading="lazy" decoding="async"></a>
-                    <a href="assets/pages/img/products/model5.jpg" class="fancybox-button" rel="photos-lib"><img alt="Berry Lace Dress" src="assets/pages/img/products/model5.jpg" loading="lazy" decoding="async"></a>
+                    <?php foreach ($productImageSet as $index => $imagePath): ?>
+                      <?php
+                      $thumbColors = [];
+                      foreach ($colorImageMap as $colorKey => $colorPaths) {
+                          if (in_array($imagePath, $colorPaths, true)) {
+                              $thumbColors[] = $colorKey;
+                          }
+                      }
+                      $thumbColorAttr = implode(',', $thumbColors);
+                      ?>
+                      <a href="<?php echo fe_h($imagePath); ?>" class="fancybox-button<?php echo $index === 0 ? ' active' : ''; ?>" rel="photos-lib" data-main-image="true">
+                        <img alt="<?php echo fe_h($productName); ?>" src="<?php echo fe_h($imagePath); ?>" loading="lazy" decoding="async" data-colors="<?php echo fe_h($thumbColorAttr); ?>">
+                      </a>
+                    <?php endforeach; ?>
                   </div>
                 </div>
                 <div class="col-md-6 col-sm-6">
                   <h1><?php echo fe_h($productName); ?></h1>
                   <div class="price-availability-block clearfix">
                     <div class="price">
-                      <strong><span>$</span><?php echo number_format($productPrice, 2); ?></strong>
-                      <em>$<span>62.00</span></em>
+                      <strong><span>&#8377;</span><?php echo number_format($productPrice, 2); ?></strong>
+                      <em>&#8377;<span>62.00</span></em>
                     </div>
                     <div class="availability">
                       Availability: <strong><?php echo $availabilityLabel; ?></strong>
@@ -462,26 +568,32 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     <p><?php echo fe_h($productDesc !== '' ? $productDesc : 'No description added yet.'); ?></p>
                   </div>
                   <div class="product-page-options">
-                    <div class="pull-left">
-                      <label class="control-label">Size:</label>
-                      <select class="form-control input-sm" name="field_0">
-                        <option>L</option>
-                        <option>M</option>
-                        <option>XL</option>
-                      </select>
-                    </div>
-                    <div class="pull-left">
-                      <label class="control-label">Color:</label>
-                      <select class="form-control input-sm" name="field_0">
-                        <option>Red</option>
-                        <option>Blue</option>
-                        <option>Black</option>
-                      </select>
-                    </div>
+                    <?php if ($sizeOptions !== []): ?>
+                      <div class="pull-left">
+                        <label class="control-label">Size:</label>
+                        <select class="form-control input-sm" name="product_size">
+                          <?php foreach ($sizeOptions as $sizeValue): ?>
+                            <option><?php echo fe_h($sizeValue); ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+                    <?php endif; ?>
+                    <?php if ($colorOptions !== []): ?>
+                      <div class="pull-left">
+                        <label class="control-label">Color:</label>
+                        <select class="form-control input-sm" name="product_color" id="product-color-select">
+                          <?php foreach ($colorOptions as $colorValue): ?>
+                            <option><?php echo fe_h($colorValue); ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+                    <?php endif; ?>
                   </div>
                   <div class="product-page-cart">
                     <div class="product-quantity">
-                        <input id="product-quantity" type="text" value="1" readonly class="form-control input-sm" name="product-quantity">
+                        <button type="button" class="btn btn-default btn-sm" id="qty-decrease">-</button>
+                        <input id="product-quantity" type="text" value="1" readonly class="form-control input-sm" name="product-quantity" style="display:inline-block; width:60px; text-align:center;">
+                        <button type="button" class="btn btn-default btn-sm" id="qty-increase">+</button>
                     </div>
                     <button class="btn btn-primary" type="submit" data-product-id="<?php echo $selectedProductId; ?>">Add to cart</button>
                   </div>
@@ -491,13 +603,6 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                     </div>
                     <a href="#Reviews" data-toggle="tab"><?php echo $reviewCount; ?> reviews</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#Reviews" data-toggle="tab">Write a review</a>
                   </div>
-                  <ul class="social-icons">
-                    <li><a class="facebook" data-original-title="facebook" href="javascript:;"></a></li>
-                    <li><a class="twitter" data-original-title="twitter" href="javascript:;"></a></li>
-                    <li><a class="googleplus" data-original-title="googleplus" href="javascript:;"></a></li>
-                    <li><a class="evernote" data-original-title="evernote" href="javascript:;"></a></li>
-                    <li><a class="tumblr" data-original-title="tumblr" href="javascript:;"></a></li>
-                  </ul>
                 </div>
 
                 <div class="product-page-content">
@@ -529,7 +634,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                         </tr>
                         <tr>
                           <td class="datasheet-features-type">Price</td>
-                          <td>$<?php echo number_format($productPrice, 2); ?></td>
+                          <td>&#8377; <?php echo number_format($productPrice, 2); ?></td>
                         </tr>
                         <tr>
                           <td class="datasheet-features-type">Stock</td>
@@ -648,7 +753,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                         </div>
                       </div>
                       <h3><a href="shop-item.php?id=<?php echo (int) $related['id']; ?>"><?php echo fe_h($relatedName); ?></a></h3>
-                      <div class="pi-price">$<?php echo number_format((float) $related['price'], 2); ?></div>
+                      <div class="pi-price">&#8377; <?php echo number_format((float) $related['price'], 2); ?></div>
                       <p class="product-meta"><?php echo fe_h($relatedCategoryName); ?> | <?php echo (int) ($related['stock_qty'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?></p>
                       <button type="button" class="btn btn-primary js-add-to-cart" data-product-id="<?php echo (int) $related['id']; ?>">Add to cart</button>
                       <a href="shop-item.php?id=<?php echo (int) $related['id']; ?>" class="btn btn-default">Details</a>
@@ -703,7 +808,7 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                         </div>
                       </div>
                       <h3><a href="shop-item.php?id=<?php echo $popularId; ?>"><?php echo fe_h($popularName); ?></a></h3>
-                      <div class="pi-price">$<?php echo number_format($popularPrice, 2); ?></div>
+                      <div class="pi-price">&#8377; <?php echo number_format($popularPrice, 2); ?></div>
                       <p class="product-meta"><?php echo $popularStock > 0 ? 'In Stock' : 'Out of Stock'; ?> | <?php echo $popularReviewCount; ?> reviews | <?php echo number_format($popularAvgRating, 1); ?>/5</p>
                       <button type="button" class="btn btn-default js-add-to-cart" data-product-id="<?php echo $popularId; ?>">Add to cart</button>
                       <?php if ($isPopularFeatured): ?>
@@ -741,8 +846,8 @@ Purchase Premium Metronic Admin Theme: http://themeforest.net/item/metronic-resp
                   <h2>Cool green dress with red bell</h2>
                   <div class="price-availability-block clearfix">
                     <div class="price">
-                      <strong><span>$</span>47.00</strong>
-                      <em>$<span>62.00</span></em>
+                      <strong><span>&#8377;</span>47.00</strong>
+                      <em>&#8377;<span>62.00</span></em>
                     </div>
                     <div class="availability">
                       Availability: <strong>In Stock</strong>
@@ -820,6 +925,76 @@ Nostrud duis molestie at dolore.</p>
             if (hash && jQuery('#myTab a[href="' + hash + '"]').length) {
                 jQuery('#myTab a[href="' + hash + '"]').tab('show');
             }
+
+            jQuery('.product-other-images a[data-main-image="true"]').on('click', function () {
+                var src = jQuery(this).attr('href');
+                if (!src) {
+                    return;
+                }
+                var mainImage = jQuery('.product-main-image img');
+                mainImage.attr('src', src);
+                mainImage.attr('data-BigImgsrc', src);
+                jQuery('.product-other-images a').removeClass('active');
+                jQuery(this).addClass('active');
+            });
+
+            var colorSelect = jQuery('#product-color-select');
+            function applyColorImages() {
+                if (!colorSelect.length) {
+                    return;
+                }
+                var selectedColor = String(colorSelect.val() || '').trim().toUpperCase();
+                var thumbs = jQuery('.product-other-images a[data-main-image="true"]');
+                if (!thumbs.length || selectedColor === '') {
+                    return;
+                }
+
+                var firstMatch = null;
+                thumbs.each(function () {
+                    var img = jQuery(this).find('img');
+                    var colors = String(img.data('colors') || '').toUpperCase();
+                    var hasColor = colors !== '' && colors.split(',').indexOf(selectedColor) !== -1;
+                    if (colors === '') {
+                        jQuery(this).show();
+                        if (!firstMatch) {
+                            firstMatch = jQuery(this);
+                        }
+                    } else if (hasColor) {
+                        jQuery(this).show();
+                        if (!firstMatch) {
+                            firstMatch = jQuery(this);
+                        }
+                    } else {
+                        jQuery(this).hide();
+                    }
+                });
+
+                if (firstMatch && firstMatch.length) {
+                    firstMatch.trigger('click');
+                } else {
+                    thumbs.show();
+                }
+            }
+
+            colorSelect.on('change', applyColorImages);
+            applyColorImages();
+
+            var qtyInput = jQuery('#product-quantity');
+            jQuery('#qty-increase').on('click', function () {
+                var current = parseInt(qtyInput.val(), 10);
+                if (isNaN(current) || current < 1) {
+                    current = 1;
+                }
+                qtyInput.val(current + 1);
+            });
+            jQuery('#qty-decrease').on('click', function () {
+                var current = parseInt(qtyInput.val(), 10);
+                if (isNaN(current) || current <= 1) {
+                    qtyInput.val(1);
+                    return;
+                }
+                qtyInput.val(current - 1);
+            });
         });
     </script>
     <!-- END PAGE LEVEL JAVASCRIPTS -->
