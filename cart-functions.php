@@ -903,6 +903,14 @@ function createOrderFromCart(int $userId): array
         if (!$itemStmt) {
             throw new RuntimeException('Could not create order items.');
         }
+        $stockStmt = $db->prepare(
+            'UPDATE products
+             SET stock_qty = stock_qty - ?
+             WHERE id = ? AND stock_qty >= ?'
+        );
+        if (!$stockStmt) {
+            throw new RuntimeException('Could not update stock.');
+        }
 
         foreach ($items as $item) {
             $productId = (int) ($item['id'] ?? 0);
@@ -914,8 +922,15 @@ function createOrderFromCart(int $userId): array
 
             $itemStmt->bind_param('iiid', $orderId, $productId, $qty, $price);
             $itemStmt->execute();
+
+            $stockStmt->bind_param('iii', $qty, $productId, $qty);
+            $stockStmt->execute();
+            if ($stockStmt->affected_rows <= 0) {
+                throw new RuntimeException('Insufficient stock for one or more items.');
+            }
         }
         $itemStmt->close();
+        $stockStmt->close();
 
         if ($couponData && $couponCode !== null && $couponCode !== '') {
             $coupon = cartFindValidCoupon($couponCode, $subtotalAmount);
